@@ -19,6 +19,8 @@ async function bootstrap(): Promise<void> {
 
   await configurarApp(app);
 
+  app.enableShutdownHooks();
+
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
   log.info(

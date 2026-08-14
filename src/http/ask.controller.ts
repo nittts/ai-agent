@@ -41,8 +41,12 @@ export class AskController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  async perguntar(@Body() body: { pergunta?: unknown }): Promise<AskResponse> {
-    return this.agente.perguntar(validarPergunta(body?.pergunta));
+  async perguntar(
+    @Body() body: { pergunta?: unknown; ignorarCache?: unknown },
+  ): Promise<AskResponse> {
+    return this.agente.perguntar(validarPergunta(body?.pergunta), {
+      ignorarCache: body?.ignorarCache === true,
+    });
   }
 
   @Get('stream')

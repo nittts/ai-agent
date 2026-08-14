@@ -6,6 +6,8 @@ import type { EmbeddingsPort } from '../llm/embeddings';
 import type { VectorStorePort } from '../retrieval/types';
 import { CHAT_MODEL } from '../llm/llm.module';
 import type { ChatModelPort } from '../llm/chat-model';
+import { CACHE } from '../cache/cache.module';
+import { chaveResposta, type CachePort } from '../cache/cache.port';
 import { RhApiClient } from '../tools/rh-api.client';
 import { currentCorrelationId, newCorrelationId } from '../observability/logger';
 import type { AskResponse } from '../http/contracts';
@@ -14,7 +16,11 @@ import type { EstadoAgenteType } from './state';
 
 export interface OpcoesPergunta {
   aoReceberToken?: (token: string) => void;
+
+  ignorarCache?: boolean;
 }
+
+type RespostaCacheavel = Omit<AskResponse, 'tempos' | 'correlationId' | 'cache' | 'custo'>;
 
 @Injectable()
 export class AgentService {
@@ -23,13 +29,37 @@ export class AgentService {
     @Inject(CHAT_MODEL) private readonly modelo: ChatModelPort,
     @Inject(EMBEDDINGS) private readonly embeddings: EmbeddingsPort,
     @Inject(VECTOR_STORE) private readonly store: VectorStorePort,
-
+    @Inject(CACHE) private readonly cache: CachePort,
     @Inject(RhApiClient) private readonly cliente: RhApiClient,
   ) {}
 
   async perguntar(pergunta: string, opcoes: OpcoesPergunta = {}): Promise<AskResponse> {
     const inicio = Date.now();
     const correlationId = currentCorrelationId() ?? newCorrelationId();
+
+    const chave = chaveResposta(pergunta, this.modelo.nomeModelo, this.store.corpusVersion());
+
+    if (!opcoes.ignorarCache) {
+      const emCache = await this.cache.obter<RespostaCacheavel>(chave);
+
+      if (emCache) {
+        opcoes.aoReceberToken?.(emCache.resposta);
+
+        return {
+          ...emCache,
+          cache: 'HIT',
+          tempos: {
+            totalMs: Date.now() - inicio,
+            ttftMs: null,
+            retrievalMs: null,
+            llmMs: null,
+          },
+
+          custo: { tokensEntrada: 0, tokensSaida: 0, custoUsd: 0 },
+          correlationId,
+        };
+      }
+    }
 
     const grafo = construirGrafo({
       env: this.env,
@@ -41,8 +71,38 @@ export class AgentService {
     });
 
     const final = (await grafo.invoke({ pergunta })) as EstadoAgenteType;
+    const resposta = this.montarResposta(final, inicio, correlationId);
 
-    return this.montarResposta(final, inicio, correlationId);
+    await this.talvezGravar(chave, final, resposta);
+
+    return resposta;
+  }
+
+  private async talvezGravar(
+    chave: string,
+    estado: EstadoAgenteType,
+    resposta: AskResponse,
+  ): Promise<void> {
+    if (!this.cache.habilitado) return;
+    if (estado.degradado) return;
+    if (estado.motivoRecusa === 'faltou_identificacao') return;
+    if (estado.motivoRecusa === 'fontes_indisponiveis') return;
+    if (!resposta.resposta) return;
+
+    if (estado.resultadosTool.length > 0) return;
+
+    await this.cache.gravar<RespostaCacheavel>(
+      chave,
+      {
+        resposta: resposta.resposta,
+        rota: resposta.rota,
+        fontes: resposta.fontes,
+        degradado: false,
+        avisos: [],
+        recusado: resposta.recusado,
+      },
+      this.env.CACHE_TTL_SECONDS,
+    );
   }
 
   private montarResposta(
@@ -63,7 +123,7 @@ export class AgentService {
       degradado: estado.degradado,
       avisos: estado.avisos,
       recusado: estado.recusado,
-      cache: 'OFF',
+      cache: this.cache.habilitado ? 'MISS' : 'OFF',
       tempos: {
         totalMs: Date.now() - inicio,
         ttftMs: null,

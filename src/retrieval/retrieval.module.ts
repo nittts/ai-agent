@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { ENV } from '../config/config.module';
 import type { Env } from '../config/env';
+import { CACHE } from '../cache/cache.module';
+import type { CachePort } from '../cache/cache.port';
+import { CachedEmbeddings } from '../cache/cached-embeddings';
 import { criarEmbeddings, type EmbeddingsPort } from '../llm/embeddings';
 import { MemoryVectorStore } from './memory-vector-store';
 import type { IndexSnapshot } from './types';
@@ -14,8 +17,12 @@ export const EMBEDDINGS = Symbol('EMBEDDINGS');
   providers: [
     {
       provide: EMBEDDINGS,
-      useFactory: (env: Env): EmbeddingsPort => criarEmbeddings(env),
-      inject: [ENV],
+
+      useFactory: (env: Env, cache: CachePort): EmbeddingsPort => {
+        const base = criarEmbeddings(env);
+        return cache.habilitado ? new CachedEmbeddings(base, cache, env.CACHE_TTL_SECONDS) : base;
+      },
+      inject: [ENV, CACHE],
     },
     {
       provide: VECTOR_STORE,
