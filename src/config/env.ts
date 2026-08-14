@@ -1,4 +1,7 @@
+import { config as carregarDotenv } from 'dotenv';
 import { z } from 'zod';
+
+carregarDotenv();
 
 const vazioComoAusente = (v: unknown) => (v === '' ? undefined : v);
 
@@ -12,7 +15,7 @@ export const envSchema = z
     LLM_PROVIDER: z.enum(['gemini', 'fake']).default('gemini'),
     GEMINI_API_KEY: z.preprocess(vazioComoAusente, z.string().min(1).optional()),
 
-    GEMINI_CHAT_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+    GEMINI_CHAT_MODEL: z.string().min(1).default('gemini-3.5-flash-lite'),
 
     GEMINI_EMBED_MODEL: z.string().min(1).default('gemini-embedding-001'),
 

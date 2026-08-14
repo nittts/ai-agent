@@ -46,12 +46,21 @@ function extrairUso(meta: MetadadosUso | undefined): UsoTokens {
   return { entrada: meta?.input_tokens ?? 0, saida: meta?.output_tokens ?? 0 };
 }
 
+interface RespostaGemini {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}
+
 export class GeminiChatModel implements ChatModelPort {
   readonly nomeModelo: string;
   private readonly modelo: ChatGoogleGenerativeAI;
+  private readonly apiKey: string;
+  private readonly timeoutMs: number;
 
   constructor(env: Env) {
     this.nomeModelo = env.GEMINI_CHAT_MODEL;
+    this.apiKey = env.GEMINI_API_KEY ?? '';
+    this.timeoutMs = env.LLM_TIMEOUT_MS;
     this.modelo = new ChatGoogleGenerativeAI({
       apiKey: env.GEMINI_API_KEY,
       model: env.GEMINI_CHAT_MODEL,
@@ -86,18 +95,67 @@ export class GeminiChatModel implements ChatModelPort {
     usuario,
     aoReceberToken,
   }: ParamsGeracao): Promise<{ texto: string; uso: UsoTokens }> {
-    const mensagens = [new SystemMessage(sistema), new HumanMessage(usuario)];
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${this.nomeModelo}` +
+      `:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+
+    const resposta = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: sistema }] },
+        contents: [{ role: 'user', parts: [{ text: usuario }] }],
+        generationConfig: { temperature: 0 },
+      }),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+
+    if (!resposta.ok || !resposta.body) {
+      const detalhe = await resposta.text().catch(() => '');
+      const erro = new Error(
+        `Gemini respondeu ${resposta.status}: ${detalhe.slice(0, 200)}`,
+      ) as Error & { status: number };
+      erro.status = resposta.status;
+      throw erro;
+    }
 
     let texto = '';
     let uso: UsoTokens = USO_ZERO;
 
-    for await (const pedaco of await this.modelo.stream(mensagens)) {
-      const conteudo = typeof pedaco.content === 'string' ? pedaco.content : '';
-      if (conteudo) {
-        texto += conteudo;
-        aoReceberToken?.(conteudo);
+    const leitor = resposta.body.getReader();
+    const decodificador = new TextDecoder();
+    let buffer = '';
+
+    for (;;) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+
+      buffer += decodificador.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+      let corte: number;
+      while ((corte = buffer.indexOf('\n\n')) >= 0) {
+        const bloco = buffer.slice(0, corte);
+        buffer = buffer.slice(corte + 2);
+
+        const linha = bloco.split('\n').find((l) => l.startsWith('data: '));
+        if (!linha) continue;
+
+        const evento = JSON.parse(linha.slice(6)) as RespostaGemini;
+
+        for (const parte of evento.candidates?.[0]?.content?.parts ?? []) {
+          if (parte.text) {
+            texto += parte.text;
+            aoReceberToken?.(parte.text);
+          }
+        }
+
+        if (evento.usageMetadata) {
+          uso = {
+            entrada: evento.usageMetadata.promptTokenCount ?? 0,
+            saida: evento.usageMetadata.candidatesTokenCount ?? 0,
+          };
+        }
       }
-      if (pedaco.usage_metadata) uso = extrairUso(pedaco.usage_metadata);
     }
 
     return { texto, uso };
