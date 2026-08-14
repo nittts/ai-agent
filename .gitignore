@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+
+# Snapshot do índice: gerado por `npm run ingest`, contém embeddings (arquivo grande).
+eval/index-snapshot.json
+
+# NÃO ignorar public/app.js: o bundle é commitado de propósito, para que o
+# avaliador não precise de nenhuma etapa de build para abrir o console.

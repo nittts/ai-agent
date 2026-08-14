@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assistente RH/TI</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #16181d;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --panel: #f9fafb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101216;
+          --fg: #e8eaed;
+          --muted: #9aa1ab;
+          --line: #272b33;
+          --panel: #171a20;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        padding: 14px 20px;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 13px; }
+      main { padding: 20px; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+        max-width: 560px;
+      }
+      .card h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      pre {
+        margin: 0;
+        font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Assistente RH/TI</h1>
+      <span class="sub">agente LangGraph · RAG + tools HTTP</span>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>Estado do serviço</h2>
+        <pre id="health">carregando…</pre>
+      </div>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

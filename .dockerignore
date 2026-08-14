@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env.local
+*.log
+coverage
+eval/results
+eval/index-snapshot.json
+docs
+*.pdf
+README.md
+ARCHITECTURE.md

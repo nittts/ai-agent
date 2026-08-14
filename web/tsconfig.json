@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    /* Único lugar do projeto que enxerga a DOM. O backend não deve compilar
+       com estes globals disponíveis — se `document` aparecer em src/, tem que quebrar. */
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["**/*.ts", "../src/http/contracts.ts"],
+  "exclude": []
+}

@@ -1,0 +1,56 @@
+# =============================================================================
+# `docker compose up --build` deve ser suficiente para o avaliador rodar tudo:
+# API + console em http://localhost:3000, com Redis para o cache.
+# =============================================================================
+
+services:
+  redis:
+    image: redis:7-alpine
+    # `--save ""` desliga persistência: é cache, não banco. Perder o conteúdo
+    # num restart é aceitável por definição, e evita I/O de disco no load test.
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory-policy', 'allkeys-lru']
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-2.5-flash}
+      GEMINI_EMBED_MODEL: ${GEMINI_EMBED_MODEL:-gemini-embedding-001}
+
+      REDIS_URL: redis://redis:6379
+      CACHE_ENABLED: ${CACHE_ENABLED:-true}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+
+      MOCK_API_BASE_URL: http://localhost:3000/mock/v1
+      CHAOS_ENABLED: ${CHAOS_ENABLED:-true}
+
+      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-4}
+      RETRIEVAL_MIN_SCORE: ${RETRIEVAL_MIN_SCORE:-0.55}
+      INDEX_PATH: ./eval/index-snapshot.json
+
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+    volumes:
+      # O snapshot do índice é gerado por `npm run ingest` no host e montado aqui,
+      # para que o container suba instantaneamente e o benchmark nunca pague o
+      # custo de ingestão.
+      - ./eval:/app/eval
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
