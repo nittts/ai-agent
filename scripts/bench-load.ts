@@ -33,10 +33,10 @@ const SCENARIOS: Scenario[] = [
     name: 'servico-isolado',
     provider: 'fake',
     warmCache: false,
-    description: 'Capacidade do serviço sem o provedor no caminho (event loop, HTTP, retrieval).',
+    description: 'Service capacity with the provider out of the path (event loop, HTTP, retrieval).',
   },
   {
-    name: 'producao-cache-quente',
+    name: 'production-warm-cache',
     provider: 'gemini',
     warmCache: true,
     description: 'Vazão realista: questions repetidas servidas do cache Redis.',
@@ -65,7 +65,7 @@ async function waitForHealth(base: string, attempts = 60): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Serviço não respondeu em ${base}/health`);
+  throw new Error(`Service did not respond at ${base}/health`);
 }
 
 function startServer(port: number, scenario: Scenario): ChildProcess {

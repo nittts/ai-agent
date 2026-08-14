@@ -104,7 +104,7 @@ async function main(): Promise<void> {
   console.log(
     `\nLatency benchmark\n` +
       `  model=${env.GEMINI_CHAT_MODEL}  embeddings=${env.GEMINI_EMBED_MODEL}\n` +
-      `  provider=${env.LLM_PROVIDER}  modo=${MODE}  rodadas=${ROUNDS}\n` +
+      `  provider=${env.LLM_PROVIDER}  mode=${MODE}  rounds=${ROUNDS}\n` +
       `  questions=${questions.length}  total samples=${questions.length * ROUNDS}\n`,
   );
 

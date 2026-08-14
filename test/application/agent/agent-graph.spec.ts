@@ -214,13 +214,27 @@ describe('agent graph', () => {
     expect(state.answer).not.toMatch(/você é o assistente interno/i);
   });
 
-  it('a generation failure becomes an explicit refusal, not an exception', async () => {
+  it('a generation failure with NO output becomes an explicit refusal', async () => {
     model.failNextGeneration = new Error('model is down');
     const state = await run('Quantos dias de férias eu tenho por ano?');
 
     expect(state.refused).toBe(true);
     expect(state.refusalReason).toBe('sourcesUnavailable');
     expect(state.degraded).toBe(true);
+  });
+
+  it('a failure AFTER partial output keeps the text and degrades instead of refusing', async () => {
+    const partial = 'Você tem direito a 30 dias ';
+    model.failAfterStreaming = { text: partial, error: new Error('deadline exceeded') };
+
+    const state = await run('Quantos dias de férias eu tenho por ano?');
+
+    expect(state.refused).toBe(false);
+    expect(state.degraded).toBe(true);
+    expect(state.answer).toContain('30 dias');
+
+    expect(state.answer).toMatch(/interrompida/i);
+    expect(state.warnings.join(' ')).toMatch(/interrompida/i);
   });
 
   it('emits tokens incrementally when a callback is supplied', async () => {

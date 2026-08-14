@@ -6,6 +6,17 @@ import { timed, type NodeContext, type StatePatch } from './node-context';
 export function createAnswerNode(ctx: NodeContext) {
   return (state: AgentStateType) =>
     timed('generateAnswer', async (): Promise<StatePatch> => {
+      let streamedText = '';
+
+      const onToken = ctx.onToken
+        ? (token: string) => {
+            streamedText += token;
+            ctx.onToken!(token);
+          }
+        : (token: string) => {
+            streamedText += token;
+          };
+
       try {
         const { text, usage } = await withRetry(
           () =>
@@ -17,7 +28,7 @@ export function createAnswerNode(ctx: NodeContext) {
                 state.toolResults,
                 state.warnings,
               ),
-              onToken: ctx.onToken,
+              onToken,
               timeoutMs: remainingBudget(ctx.deadline, ctx.settings.llmTimeoutMs),
             }),
           { attempts: ctx.settings.llmMaxRetries, deadline: ctx.deadline },
@@ -25,6 +36,14 @@ export function createAnswerNode(ctx: NodeContext) {
 
         return { answer: text, usage };
       } catch {
+        if (streamedText.trim().length > 0) {
+          return {
+            answer: `${streamedText.trimEnd()}\n\n[resposta interrompida antes de terminar]`,
+            degraded: true,
+            warnings: ['a geração da resposta foi interrompida antes de concluir'],
+          };
+        }
+
         return {
           refused: true,
           refusalReason: 'sourcesUnavailable',

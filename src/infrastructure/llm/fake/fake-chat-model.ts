@@ -13,6 +13,8 @@ export class FakeChatModel implements ChatModelPort {
 
   public failNextGeneration: Error | null = null;
 
+  public failAfterStreaming: { text: string; error: Error } | null = null;
+
   async structured<T>({ user, schema }: StructuredParams<T>): Promise<{
     data: T;
     usage: TokenUsage;
@@ -33,6 +35,13 @@ export class FakeChatModel implements ChatModelPort {
     if (this.failNextGeneration) {
       const error = this.failNextGeneration;
       this.failNextGeneration = null;
+      throw error;
+    }
+
+    if (this.failAfterStreaming) {
+      const { text, error } = this.failAfterStreaming;
+      this.failAfterStreaming = null;
+      for (const piece of text.match(/\S+\s*/g) ?? [text]) onToken?.(piece);
       throw error;
     }
 
