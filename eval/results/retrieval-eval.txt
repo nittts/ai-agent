@@ -1,14 +1,17 @@
-Avaliação de retrieval — modelo=gemini-embedding-001 corpusVersion=02fbb3bb10f2
-gerado em 2026-08-14T20:59:55.655Z
+Retrieval evaluation — model=gemini-embedding-001 corpusVersion=02fbb3bb10f2
+generated at 2026-08-14T21:25:21.765Z
 
-métrica        valor
+metric         value
 --------------------
 recall@1       1.000
 recall@3       1.000
 recall@5       1.000
 MRR            1.000
 
-por categoria:
-  kb_simples     n= 6  recall@3=1.000
-  kb_multi       n= 4  recall@3=1.000
-  hibrida        n= 4  recall@3=1.000
+by category:
+  kbSimple       n= 6  recall@3=1.000
+  kbMulti        n= 4  recall@3=1.000
+  hybrid         n= 4  recall@3=1.000
+
+n=14 labelled questions over 51 chunks. Small, well-separated corpus:
+treat a perfect score as a sanity floor, not as evidence of robustness at scale.

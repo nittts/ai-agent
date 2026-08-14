@@ -4,46 +4,46 @@ import { join, resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import autocannon from 'autocannon';
 
-interface Cenario {
-  nome: string;
+interface Scenario {
+  name: string;
   provider: 'fake' | 'gemini';
-  cacheQuente: boolean;
-  descricao: string;
+  warmCache: boolean;
+  description: string;
 }
 
-interface Linha {
-  cenario: string;
-  concorrencia: number;
+interface Row {
+  scenario: string;
+  concurrency: number;
   rps: number;
-  latenciaP50: number;
-  latenciaP95: number;
-  latenciaP99: number;
-  erros: number;
-  naoDoisXX: number;
-  duracaoS: number;
+  latencyP50: number;
+  latencyP95: number;
+  latencyP99: number;
+  errors: number;
+  non2xx: number;
+  durationS: number;
 }
 
-const CONCORRENCIAS = (process.env.CONCORRENCIAS ?? '1,5,10,25,50')
+const CONCURRENCIES = (process.env.CONCURRENCIES ?? '1,5,10,25,50')
   .split(',')
   .map((n) => Number(n.trim()));
-const DURACAO = Number(process.env.DURACAO ?? 10);
+const DURATION = Number(process.env.DURATION ?? 10);
 
-const CENARIOS: Cenario[] = [
+const SCENARIOS: Scenario[] = [
   {
-    nome: 'servico-isolado',
+    name: 'servico-isolado',
     provider: 'fake',
-    cacheQuente: false,
-    descricao: 'Capacidade do serviço sem o provedor no caminho (event loop, HTTP, retrieval).',
+    warmCache: false,
+    description: 'Capacidade do serviço sem o provedor no caminho (event loop, HTTP, retrieval).',
   },
   {
-    nome: 'producao-cache-quente',
+    name: 'producao-cache-quente',
     provider: 'gemini',
-    cacheQuente: true,
-    descricao: 'Vazão realista: perguntas repetidas servidas do cache Redis.',
+    warmCache: true,
+    description: 'Vazão realista: questions repetidas servidas do cache Redis.',
   },
 ];
 
-async function portaLivre(): Promise<number> {
+async function freePort(): Promise<number> {
   return new Promise((res, rej) => {
     const s = createServer();
     s.once('error', rej);
@@ -55,8 +55,8 @@ async function portaLivre(): Promise<number> {
   });
 }
 
-async function esperarSaude(base: string, tentativas = 60): Promise<void> {
-  for (let i = 0; i < tentativas; i++) {
+async function waitForHealth(base: string, attempts = 60): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
     try {
       const r = await fetch(`${base}/health`);
       if (r.ok) return;
@@ -68,117 +68,117 @@ async function esperarSaude(base: string, tentativas = 60): Promise<void> {
   throw new Error(`Serviço não respondeu em ${base}/health`);
 }
 
-function subirServidor(porta: number, cenario: Cenario): ChildProcess {
+function startServer(port: number, scenario: Scenario): ChildProcess {
   return spawn('node', ['dist/main.js'], {
     env: {
       ...process.env,
-      PORT: String(porta),
-      LLM_PROVIDER: cenario.provider,
-      MOCK_API_BASE_URL: `http://127.0.0.1:${porta}/mock/v1`,
+      PORT: String(port),
+      LLM_PROVIDER: scenario.provider,
+      MOCK_API_BASE_URL: `http://127.0.0.1:${port}/mock/v1`,
       LOG_LEVEL: 'error',
       OTEL_ENABLED: 'false',
 
-      INDEX_PATH: cenario.provider === 'fake' ? './eval/index-test.json' : './eval/index-snapshot.json',
-      RETRIEVAL_MIN_SCORE: cenario.provider === 'fake' ? '0.18' : '0.55',
+      INDEX_PATH: scenario.provider === 'fake' ? './eval/index-test.json' : './eval/index-snapshot.json',
+      RETRIEVAL_MIN_SCORE: scenario.provider === 'fake' ? '0.18' : '0.55',
     },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
 }
 
 async function main(): Promise<void> {
-  const arquivo = JSON.parse(
+  const file = JSON.parse(
     await readFile(resolve(process.cwd(), 'eval', 'questions.json'), 'utf-8'),
-  ) as { perguntas: { texto: string }[] };
+  ) as { questions: { text: string }[] };
 
-  const perguntas = extrairPerguntas(arquivo);
+  const questions = pickQuestions(file);
 
-  const linhas: Linha[] = [];
+  const rows: Row[] = [];
 
-  for (const cenario of CENARIOS) {
-    const porta = await portaLivre();
-    const base = `http://127.0.0.1:${porta}`;
-    const servidor = subirServidor(porta, cenario);
+  for (const scenario of SCENARIOS) {
+    const port = await freePort();
+    const base = `http://127.0.0.1:${port}`;
+    const server = startServer(port, scenario);
 
     try {
-      await esperarSaude(base);
+      await waitForHealth(base);
 
-      if (cenario.cacheQuente) {
-        for (const pergunta of perguntas) {
+      if (scenario.warmCache) {
+        for (const question of questions) {
           await fetch(`${base}/ask`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ pergunta }),
+            body: JSON.stringify({ question }),
           }).catch(() => undefined);
         }
       }
 
-      console.log(`\n=== cenário: ${cenario.nome} (provider=${cenario.provider}) ===`);
-      console.log(`    ${cenario.descricao}\n`);
+      console.log(`\n=== cenário: ${scenario.name} (provider=${scenario.provider}) ===`);
+      console.log(`    ${scenario.description}\n`);
 
-      for (const concorrencia of CONCORRENCIAS) {
-        const resultado = await autocannon({
+      for (const concurrency of CONCURRENCIES) {
+        const result = await autocannon({
           url: `${base}/ask`,
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          connections: concorrencia,
-          duration: DURACAO,
-          requests: perguntas.map((pergunta) => ({ body: JSON.stringify({ pergunta }) })),
+          connections: concurrency,
+          duration: DURATION,
+          requests: questions.map((question) => ({ body: JSON.stringify({ question }) })),
         });
 
-        const linha: Linha = {
-          cenario: cenario.nome,
-          concorrencia,
-          rps: Number(resultado.requests.average.toFixed(1)),
-          latenciaP50: resultado.latency.p50,
-          latenciaP95: resultado.latency.p97_5,
-          latenciaP99: resultado.latency.p99,
-          erros: resultado.errors,
-          naoDoisXX: resultado.non2xx,
-          duracaoS: DURACAO,
+        const row: Row = {
+          scenario: scenario.name,
+          concurrency,
+          rps: Number(result.requests.average.toFixed(1)),
+          latencyP50: result.latency.p50,
+          latencyP95: result.latency.p97_5,
+          latencyP99: result.latency.p99,
+          errors: result.errors,
+          non2xx: result.non2xx,
+          durationS: DURATION,
         };
 
-        linhas.push(linha);
+        rows.push(row);
         console.log(
-          `  conc=${String(concorrencia).padStart(3)}  ` +
-            `rps=${String(linha.rps).padStart(8)}  ` +
-            `p50=${String(linha.latenciaP50).padStart(6)}ms  ` +
-            `p95=${String(linha.latenciaP95).padStart(6)}ms  ` +
-            `p99=${String(linha.latenciaP99).padStart(6)}ms  ` +
-            `erros=${linha.erros}  não2xx=${linha.naoDoisXX}`,
+          `  conc=${String(concurrency).padStart(3)}  ` +
+            `rps=${String(row.rps).padStart(8)}  ` +
+            `p50=${String(row.latencyP50).padStart(6)}ms  ` +
+            `p95=${String(row.latencyP95).padStart(6)}ms  ` +
+            `p99=${String(row.latencyP99).padStart(6)}ms  ` +
+            `errors=${row.errors}  não2xx=${row.non2xx}`,
         );
       }
     } finally {
-      servidor.kill('SIGTERM');
+      server.kill('SIGTERM');
       await new Promise((r) => setTimeout(r, 800));
     }
   }
 
-  const colunas: (keyof Linha)[] = [
-    'cenario',
-    'concorrencia',
+  const columns: (keyof Row)[] = [
+    'scenario',
+    'concurrency',
     'rps',
-    'latenciaP50',
-    'latenciaP95',
-    'latenciaP99',
-    'erros',
-    'naoDoisXX',
-    'duracaoS',
+    'latencyP50',
+    'latencyP95',
+    'latencyP99',
+    'errors',
+    'non2xx',
+    'durationS',
   ];
 
-  const csv = [colunas.join(','), ...linhas.map((l) => colunas.map((c) => l[c]).join(','))].join('\n');
+  const csv = [columns.join(','), ...rows.map((l) => columns.map((c) => l[c]).join(','))].join('\n');
 
-  const destino = join(process.cwd(), 'eval', 'results');
-  await mkdir(destino, { recursive: true });
-  await writeFile(join(destino, 'scale.csv'), csv, 'utf-8');
+  const outDir = join(process.cwd(), 'eval', 'results');
+  await mkdir(outDir, { recursive: true });
+  await writeFile(join(outDir, 'scale.csv'), csv, 'utf-8');
 
   console.log(`\nCSV: eval/results/scale.csv`);
 }
 
-function extrairPerguntas(arquivo: { perguntas: { texto: string }[] }): string[] {
-  return arquivo.perguntas.slice(0, 6).map((p) => p.texto);
+function pickQuestions(file: { questions: { text: string }[] }): string[] {
+  return file.questions.slice(0, 6).map((p) => p.text);
 }
 
 main().catch((err) => {
-  console.error('\nFalha no teste de carga:\n', err instanceof Error ? err.message : err);
+  console.error('\nLoad test failed:\n', err instanceof Error ? err.message : err);
   process.exit(1);
 });

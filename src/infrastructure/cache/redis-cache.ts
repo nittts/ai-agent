@@ -11,6 +11,8 @@ export class RedisCache implements CachePort {
   private readonly redis: Redis;
   private alreadyWarned = false;
 
+  private readonly ready: Promise<void>;
+
   constructor(url: string) {
     this.redis = new Redis(url, {
       lazyConnect: true,
@@ -22,7 +24,7 @@ export class RedisCache implements CachePort {
     });
 
     this.redis.on('error', (error) => this.recordFailure(error));
-    this.redis.connect().catch((error) => this.recordFailure(error));
+    this.ready = this.redis.connect().catch((error) => this.recordFailure(error));
   }
 
   private recordFailure(error: unknown): void {
@@ -39,6 +41,7 @@ export class RedisCache implements CachePort {
 
   async get<T>(key: string): Promise<T | null> {
     try {
+      await this.ready;
       const raw = await this.redis.get(PREFIX + key);
       return raw ? (JSON.parse(raw) as T) : null;
     } catch (error) {
@@ -49,6 +52,7 @@ export class RedisCache implements CachePort {
 
   async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
     try {
+      await this.ready;
       await this.redis.set(PREFIX + key, JSON.stringify(value), 'EX', ttlSeconds);
     } catch (error) {
       this.recordFailure(error);
@@ -57,6 +61,7 @@ export class RedisCache implements CachePort {
 
   async clear(): Promise<void> {
     try {
+      await this.ready;
       const keys = await this.redis.keys(`${PREFIX}*`);
       if (keys.length > 0) await this.redis.del(...keys);
     } catch (error) {

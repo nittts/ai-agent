@@ -14,7 +14,7 @@ import type { AskResponse } from '../src/presentation/http/api-contract';
 interface DemoQuestion {
   id: string;
   category: string;
-  texto: string;
+  text: string;
 }
 
 interface Sample {
@@ -59,7 +59,7 @@ function percentile(valores: number[], p: number): number {
 }
 
 function summarise(label: string, samples: Sample[]): string {
-  if (samples.length === 0) return `${label.padEnd(16)} (sem samples)`;
+  if (samples.length === 0) return `${label.padEnd(16)} (no samples)`;
 
   const totals = samples.map((a) => a.totalMs);
   const cost = samples.reduce((s, a) => s + a.costUsd, 0);
@@ -102,10 +102,10 @@ async function main(): Promise<void> {
   const questions = file.questions;
 
   console.log(
-    `\nBenchmark de latência\n` +
-      `  modelo=${env.GEMINI_CHAT_MODEL}  embeddings=${env.GEMINI_EMBED_MODEL}\n` +
+    `\nLatency benchmark\n` +
+      `  model=${env.GEMINI_CHAT_MODEL}  embeddings=${env.GEMINI_EMBED_MODEL}\n` +
       `  provider=${env.LLM_PROVIDER}  modo=${MODE}  rodadas=${ROUNDS}\n` +
-      `  questions=${questions.length}  total de samples=${questions.length * ROUNDS}\n`,
+      `  questions=${questions.length}  total samples=${questions.length * ROUNDS}\n`,
   );
 
   if (MODE === 'cold') await cache.clear();
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
 
-        body: JSON.stringify({ question: question.texto, bypassCache: MODE === 'cold' }),
+        body: JSON.stringify({ question: question.text, bypassCache: MODE === 'cold' }),
       });
 
       const data = (await response.json()) as AskResponse;
@@ -181,20 +181,20 @@ async function main(): Promise<void> {
   await writeFile(join(outDir, csvName), csv, 'utf-8');
 
   const header =
-    'grupo'.padEnd(16) +
+    'group'.padEnd(16) +
     'n'.padStart(4) +
     'p50'.padStart(9) +
     'p95'.padStart(9) +
     'p99'.padStart(9) +
     'min'.padStart(9) +
     'max'.padStart(9) +
-    'cost médio'.padStart(14);
+    'avg cost'.padStart(14);
 
   const lines: string[] = ['', header, '-'.repeat(header.length)];
-  lines.push(summarise('TODAS', samples));
+  lines.push(summarise('ALL', samples));
   lines.push('');
 
-  for (const route of ['kb', 'tool', 'hybrid', 'out_of_scope']) {
+  for (const route of ['kb', 'tool', 'hybrid', 'outOfScope']) {
     lines.push(summarise(`route ${route}`, samples.filter((a) => a.route === route)));
   }
 
@@ -212,10 +212,10 @@ async function main(): Promise<void> {
 
   lines.push(
     '',
-    `falhas de infraestrutura (degraded=true): ${failed.length}/${samples.length} ` +
+    `infrastructure failures (degraded=true): ${failed.length}/${samples.length} ` +
       `(${((failed.length / samples.length) * 100).toFixed(1)}%)`,
-    `percentis EXCLUINDO requests degradados — o desempenho do agente quando o ` +
-      `provedor responde:`,
+    `percentiles EXCLUDING degraded requests — the agent's performance when the ` +
+      `provider responds:`,
     `  n=${healthy.length}  p50=${percentile(healthyTotals, 50)}ms  ` +
       `p95=${percentile(healthyTotals, 95)}ms  p99=${percentile(healthyTotals, 99)}ms  ` +
       `max=${Math.max(...healthyTotals, 0)}ms`,
@@ -223,8 +223,8 @@ async function main(): Promise<void> {
 
   lines.push(
     '',
-    `timings em ms · percentile por "nearest rank" (valor observado, não interpolado)`,
-    `cost total do benchmark: US$${totalCost.toFixed(6)}  ·  tokens: ${totalTokens}`,
+    `times in ms · percentile by nearest-rank (an OBSERVED value, never interpolated)`,
+    `total benchmark cost: US$${totalCost.toFixed(6)}  ·  tokens: ${totalTokens}`,
     `CSV: eval/results/${csvName}`,
   );
 
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
 
   await writeFile(
     join(outDir, MODE === 'cold' ? 'latency-resumo.txt' : 'latency-resumo-warm.txt'),
-    `Benchmark de latência — modelo=${env.GEMINI_CHAT_MODEL} modo=${MODE} rodadas=${ROUNDS}\n` +
+    `Latency benchmark — model=${env.GEMINI_CHAT_MODEL} modo=${MODE} rodadas=${ROUNDS}\n` +
       `gerado em ${new Date().toISOString()}\n${report}\n`,
     'utf-8',
   );
@@ -242,6 +242,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('\nFalha no benchmark:\n', err instanceof Error ? err.message : err);
+  console.error('\nBenchmark failed:\n', err instanceof Error ? err.message : err);
   process.exit(1);
 });

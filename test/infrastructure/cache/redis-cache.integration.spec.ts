@@ -1,11 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Test } from '@nestjs/testing';
-import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { AppModule } from '../../../src/app.module';
-import { configureApp } from '../../../src/bootstrap';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { RedisCache } from '../../../src/infrastructure/cache/redis-cache';
 import { AnswerQuestionUseCase } from '../../../src/application/use-cases/answer-question.use-case';
-import { CACHE, type CachePort } from '../../../src/application/ports/cache.port';
-import { freePort } from '../../helpers/free-port';
+import { FakeChatModel } from '../../../src/infrastructure/llm/fake/fake-chat-model';
+import { FakeEmbeddings } from '../../../src/infrastructure/llm/fake/fake-embeddings';
+import { InMemoryVectorStore } from '../../../src/infrastructure/retrieval/in-memory-vector-store';
+import { buildChunks, type RawDocument } from '../../../src/infrastructure/retrieval/chunker';
+import type { IndexSnapshot } from '../../../src/domain/knowledge';
+import {
+  RecordNotFoundError,
+  type HrDirectoryPort,
+} from '../../../src/application/ports/hr-directory.port';
+import {
+  benefits,
+  hoursBanks,
+  tickets,
+  vacationBalances,
+} from '../../../src/presentation/mock-hr-api/seed';
 
 const REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://127.0.0.1:6379';
 
@@ -30,10 +42,38 @@ async function redisAvailable(url: string): Promise<boolean> {
   }
 }
 
+class FakeHrDirectory implements HrDirectoryPort {
+  public failure: 'none' | 'all' = 'none';
+
+  private respond<T>(endpoint: string, data: T | undefined, resource: string, id: number) {
+    if (this.failure === 'all') throw new Error('HR system unavailable');
+    if (!data) throw new RecordNotFoundError(`${resource} ${id} does not exist.`);
+    return Promise.resolve({
+      data,
+      source: { kind: 'api' as const, endpoint, fields: [], latencyMs: 3 },
+    });
+  }
+
+  vacationBalance(id: number) {
+    return this.respond(`GET /employees/${id}/vacation-balance`, vacationBalances[id], 'Employee', id);
+  }
+  benefits(id: number) {
+    return this.respond(`GET /employees/${id}/benefits`, benefits[id], 'Employee', id);
+  }
+  hoursBank(id: number) {
+    return this.respond(`GET /employees/${id}/hours-bank`, hoursBanks[id], 'Employee', id);
+  }
+  ticket(id: number) {
+    return this.respond(`GET /tickets/${id}`, tickets[id], 'Ticket', id);
+  }
+}
+
 describe('cache with real Redis', () => {
-  let app: NestFastifyApplication;
+  let cache: RedisCache;
   let useCase: AnswerQuestionUseCase;
-  let cache: CachePort;
+  let hr: FakeHrDirectory;
+  let store: InMemoryVectorStore;
+  let embeddings: FakeEmbeddings;
   let hasRedis = false;
 
   const ifRedis = (name: string, fn: () => Promise<void>) =>
@@ -46,29 +86,53 @@ describe('cache with real Redis', () => {
     hasRedis = await redisAvailable(REDIS_URL);
     if (!hasRedis) return;
 
-    const port = await freePort();
-    process.env.HR_API_BASE_URL = `http://127.0.0.1:${port}/mock/v1`;
-    process.env.CACHE_ENABLED = 'true';
-    process.env.REDIS_URL = REDIS_URL;
+    const corpusDir = join(process.cwd(), 'corpus');
+    const files = (await readdir(corpusDir)).filter((f) => f.endsWith('.md')).sort();
+    const documents: RawDocument[] = await Promise.all(
+      files.map(async (file) => ({
+        file,
+        content: await readFile(join(corpusDir, file), 'utf-8'),
+      })),
+    );
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter({ logger: false }));
-    await configureApp(app);
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
-    await app.listen({ port, host: '127.0.0.1' });
+    const chunks = await buildChunks(documents);
+    embeddings = new FakeEmbeddings();
+    const vectors = await embeddings.embedDocuments(chunks.map((c) => c.text));
 
-    useCase = app.get(AnswerQuestionUseCase);
-    cache = app.get<CachePort>(CACHE);
-    await cache.clear();
+    const snapshot: IndexSnapshot = {
+      corpusVersion: chunks[0].metadata.corpusVersion,
+      embeddingModel: embeddings.modelName,
+      dimensions: embeddings.dimensions,
+      generatedAt: new Date().toISOString(),
+      chunks: chunks.map((c, i) => ({ ...c, embedding: vectors[i] })),
+    };
+
+    store = new InMemoryVectorStore();
+    store.load(snapshot);
+
+    cache = new RedisCache(REDIS_URL);
+    hr = new FakeHrDirectory();
+
+    useCase = new AnswerQuestionUseCase(new FakeChatModel(), embeddings, store, hr, cache, {
+      topK: 4,
+      minScore: 0.18,
+      llmTimeoutMs: 8_000,
+      llmMaxRetries: 1,
+      requestDeadlineMs: 15_000,
+      cacheTtlSeconds: 60,
+      price: { input: 0.3, output: 2.5 },
+    });
   }, 30_000);
 
-  afterAll(async () => {
-    await cache?.clear();
-    await app?.close();
+  beforeEach(async () => {
+    if (hasRedis) await cache.clear();
+    if (hr) hr.failure = 'none';
+  });
 
-    process.env.CACHE_ENABLED = 'false';
-    process.env.REDIS_URL = '';
+  afterAll(async () => {
+    if (!hasRedis) return;
+    await cache.clear();
+    await cache.close();
   });
 
   ifRedis('MISS on the first call, HIT on the second', async () => {
@@ -121,23 +185,42 @@ describe('cache with real Redis', () => {
   });
 
   ifRedis('never caches a degraded answer', async () => {
-    const root = `http://127.0.0.1:${new URL(process.env.HR_API_BASE_URL!).port}`;
-    const chaos = (mode: string) =>
-      fetch(`${root}/mock/v1/_chaos`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-
     const question = 'Meu banco de horas está em 24h (id 1042); posso converter em folga?';
 
-    await chaos('500');
-    try {
-      expect((await useCase.execute(question)).degraded).toBe(true);
-    } finally {
-      await chaos('ok');
-    }
+    hr.failure = 'all';
+    expect((await useCase.execute(question)).degraded).toBe(true);
+
+    hr.failure = 'none';
 
     expect((await useCase.execute(question)).cache).toBe('MISS');
+  });
+
+  ifRedis('an entry written by one instance is readable by another', async () => {
+    const question = 'Posso vender parte das minhas férias?';
+    await useCase.execute(question);
+
+    const otherInstance = new RedisCache(REDIS_URL);
+    try {
+      const otherUseCase = new AnswerQuestionUseCase(
+        new FakeChatModel(),
+        embeddings,
+        store,
+        hr,
+        otherInstance,
+        {
+          topK: 4,
+          minScore: 0.18,
+          llmTimeoutMs: 8_000,
+          llmMaxRetries: 1,
+          requestDeadlineMs: 15_000,
+          cacheTtlSeconds: 60,
+          price: { input: 0.3, output: 2.5 },
+        },
+      );
+
+      expect((await otherUseCase.execute(question)).cache).toBe('HIT');
+    } finally {
+      await otherInstance.close();
+    }
   });
 });
