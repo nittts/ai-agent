@@ -2,6 +2,7 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { z } from 'zod';
 import type { Env } from '../config/env';
+import { LeitorSse } from './sse';
 
 export interface UsoTokens {
   entrada: number;
@@ -124,23 +125,14 @@ export class GeminiChatModel implements ChatModelPort {
 
     const leitor = resposta.body.getReader();
     const decodificador = new TextDecoder();
-    let buffer = '';
+    const sse = new LeitorSse();
 
     for (;;) {
       const { done, value } = await leitor.read();
       if (done) break;
 
-      buffer += decodificador.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-
-      let corte: number;
-      while ((corte = buffer.indexOf('\n\n')) >= 0) {
-        const bloco = buffer.slice(0, corte);
-        buffer = buffer.slice(corte + 2);
-
-        const linha = bloco.split('\n').find((l) => l.startsWith('data: '));
-        if (!linha) continue;
-
-        const evento = JSON.parse(linha.slice(6)) as RespostaGemini;
+      for (const payload of sse.alimentar(decodificador.decode(value, { stream: true }))) {
+        const evento = JSON.parse(payload) as RespostaGemini;
 
         for (const parte of evento.candidates?.[0]?.content?.parts ?? []) {
           if (parte.text) {
