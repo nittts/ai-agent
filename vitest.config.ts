@@ -19,6 +19,20 @@ export default defineConfig({
       CACHE_ENABLED: 'false',
       CHAOS_ENABLED: 'true',
       REDIS_URL: '',
+
+      /**
+       * Limiar calibrado para os embeddings FAKE, não para o Gemini.
+       *
+       * O limiar é propriedade do modelo de embedding, não do código: sob o
+       * fake (hashing de saco de palavras) documentos relevantes pontuam
+       * 0.22–0.55, enquanto sob o gemini-embedding-001 pontuam 0.6–0.8.
+       * Usar 0.55 aqui faria o agente recusar quase toda pergunta válida e os
+       * testes "provariam" um caminho de recusa quebrado.
+       *
+       * O que se mantém sob os dois modelos é a SEPARAÇÃO: fora de escopo
+       * pontua ~0.16, bem abaixo de qualquer pergunta legítima.
+       */
+      RETRIEVAL_MIN_SCORE: '0.18',
     },
     testTimeout: 15_000,
     hookTimeout: 15_000,
