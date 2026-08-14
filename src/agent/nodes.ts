@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { comSpan } from '../observability/tracing';
 import type { Env } from '../config/env';
 import type { ChatModelPort } from '../llm/chat-model';
 import type { EmbeddingsPort } from '../llm/embeddings';
@@ -42,9 +43,30 @@ async function cronometrar<T extends Atualizacao>(
   nome: string,
   fn: () => Promise<T>,
 ): Promise<T & { tempos: Record<string, number> }> {
-  const inicio = Date.now();
-  const resultado = await fn();
-  return { ...resultado, tempos: { [nome]: Date.now() - inicio } };
+  return comSpan(`agente.${nome}`, { 'agente.no': nome }, async (span) => {
+    const inicio = Date.now();
+    const resultado = await fn();
+    const duracao = Date.now() - inicio;
+
+    span.setAttributes({
+      'agente.duracao_ms': duracao,
+      ...(resultado.rota ? { 'agente.rota': resultado.rota } : {}),
+      ...(resultado.docs ? { 'agente.docs_recuperados': resultado.docs.length } : {}),
+      ...(resultado.resultadosTool
+        ? { 'agente.tools_executadas': resultado.resultadosTool.length }
+        : {}),
+      ...(resultado.uso
+        ? {
+            'llm.tokens_entrada': resultado.uso.entrada,
+            'llm.tokens_saida': resultado.uso.saida,
+          }
+        : {}),
+      ...(resultado.degradado !== undefined ? { 'agente.degradado': resultado.degradado } : {}),
+      ...(resultado.motivoRecusa ? { 'agente.motivo_recusa': resultado.motivoRecusa } : {}),
+    });
+
+    return { ...resultado, tempos: { [nome]: duracao } };
+  });
 }
 
 export function criarNoClassificar(deps: DependenciasNos) {

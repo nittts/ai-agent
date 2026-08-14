@@ -1,4 +1,13 @@
 import 'reflect-metadata';
+
+import { loadEnv } from './config/env';
+import { iniciarOtel, encerrarOtel } from './observability/otel';
+
+const envInicial = loadEnv();
+if (envInicial.OTEL_ENABLED) {
+  iniciarOtel(envInicial.OTEL_SERVICE_NAME, process.env.npm_package_version ?? '1.0.0');
+}
+
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
@@ -32,6 +41,12 @@ async function bootstrap(): Promise<void> {
     },
     `Assistente RH/TI no ar — console em http://localhost:${env.PORT}`,
   );
+}
+
+for (const sinal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(sinal, () => {
+    void encerrarOtel().finally(() => process.exit(0));
+  });
 }
 
 bootstrap().catch((err) => {
