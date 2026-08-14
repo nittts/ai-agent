@@ -16,7 +16,7 @@ import {
   type NomeTool,
   type ResultadoTool,
 } from '../tools/rh.tools';
-import { comRetry } from '../tools/resiliencia';
+import { comRetry, prazoRestante } from '../tools/resiliencia';
 import {
   classificacaoSchema,
   type Classificacao,
@@ -35,6 +35,8 @@ export interface DependenciasNos {
   cliente: RhApiClient;
 
   aoReceberToken?: (token: string) => void;
+
+  prazoFinal: number;
 }
 
 type Atualizacao = Partial<EstadoAgenteType>;
@@ -80,8 +82,10 @@ export function criarNoClassificar(deps: DependenciasNos) {
               usuario: estado.pergunta,
               schema: classificacaoSchema,
               nomeSchema: 'classificacao',
+
+              timeoutMs: prazoRestante(deps.prazoFinal, deps.env.LLM_TIMEOUT_MS),
             }),
-          { tentativas: deps.env.LLM_MAX_RETRIES },
+          { tentativas: deps.env.LLM_MAX_RETRIES, prazoFinal: deps.prazoFinal },
         );
 
         return {
@@ -238,8 +242,9 @@ export function criarNoResponder(deps: DependenciasNos) {
                 estado.avisos,
               ),
               aoReceberToken: deps.aoReceberToken,
+              timeoutMs: prazoRestante(deps.prazoFinal, deps.env.LLM_TIMEOUT_MS),
             }),
-          { tentativas: deps.env.LLM_MAX_RETRIES },
+          { tentativas: deps.env.LLM_MAX_RETRIES, prazoFinal: deps.prazoFinal },
         );
 
         return { resposta: texto, uso };

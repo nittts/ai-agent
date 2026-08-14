@@ -69,6 +69,8 @@ export class AgentService {
       store: this.store,
       cliente: this.cliente,
       aoReceberToken: opcoes.aoReceberToken,
+
+      prazoFinal: inicio + this.env.REQUEST_DEADLINE_MS,
     });
 
     const final = (await grafo.invoke({ pergunta })) as EstadoAgenteType;

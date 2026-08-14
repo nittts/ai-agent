@@ -1,0 +1,22 @@
+Benchmark de latência — modelo=gemini-3.5-flash-lite modo=frio rodadas=3
+gerado em 2026-08-14T20:35:21.506Z
+
+grupo              n      p50      p95      p99      min      max   custo médio
+-------------------------------------------------------------------------------
+TODAS             75     1674    11881    51327      587    51327   US$0.000497
+
+rota kb           30     2045    21041    51327     1212    51327   US$0.000611
+rota tool         24     1461    11881    32349      587    32349   US$0.000343
+rota hybrid        9     2465     4057     4057     1814     4057   US$0.000946
+rota out_of_scope  12      732     2105     2105      630     2105   US$0.000182
+
+kb_simples        18     1952    51327    51327     1212    51327   US$0.000537
+kb_multi          12     2045     2532     2532     1368     2532   US$0.000722
+tool              15     1575    32349    32349     1230    32349   US$0.000394
+hibrida           12     2193     4057     4057     1372     4057   US$0.000814
+fora_de_escopo     9      729      747      747      630      747   US$0.000187
+adversarial        9      775    11881    11881      587    11881   US$0.000176
+
+tempos em ms · percentil por "nearest rank" (valor observado, não interpolado)
+custo total do benchmark: US$0.037262  ·  tokens: 64174
+CSV: eval/results/latency.csv

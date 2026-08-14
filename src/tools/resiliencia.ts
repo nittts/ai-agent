@@ -33,19 +33,32 @@ export function ehTransitorio(erro: unknown): boolean {
   );
 }
 
+export class ErroPrazoEsgotado extends Error {
+  constructor() {
+    super('Prazo total do request esgotado');
+    this.name = 'ErroPrazoEsgotado';
+  }
+}
+
 export interface OpcoesRetry {
   tentativas: number;
   baseMs?: number;
   aoRepetir?: (tentativa: number, erro: unknown) => void;
+
+  prazoFinal?: number;
 }
 
 export async function comRetry<T>(
   operacao: () => Promise<T>,
-  { tentativas, baseMs = 150, aoRepetir }: OpcoesRetry,
+  { tentativas, baseMs = 150, aoRepetir, prazoFinal }: OpcoesRetry,
 ): Promise<T> {
   let ultimoErro: unknown;
 
   for (let tentativa = 0; tentativa <= tentativas; tentativa++) {
+    if (prazoFinal !== undefined && Date.now() >= prazoFinal) {
+      throw ultimoErro ?? new ErroPrazoEsgotado();
+    }
+
     try {
       return await operacao();
     } catch (erro) {
@@ -54,12 +67,20 @@ export async function comRetry<T>(
       const podeRepetir = tentativa < tentativas && ehTransitorio(erro);
       if (!podeRepetir) break;
 
-      aoRepetir?.(tentativa + 1, erro);
-
       const teto = baseMs * 2 ** tentativa;
-      await new Promise((r) => setTimeout(r, Math.random() * teto));
+      const espera = Math.random() * teto;
+
+      if (prazoFinal !== undefined && Date.now() + espera >= prazoFinal) break;
+
+      aoRepetir?.(tentativa + 1, erro);
+      await new Promise((r) => setTimeout(r, espera));
     }
   }
 
   throw ultimoErro;
+}
+
+export function prazoRestante(prazoFinal: number | undefined, timeoutTentativaMs: number): number {
+  if (prazoFinal === undefined) return timeoutTentativaMs;
+  return Math.max(250, Math.min(timeoutTentativaMs, prazoFinal - Date.now()));
 }

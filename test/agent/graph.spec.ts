@@ -91,6 +91,7 @@ describe('grafo do agente', () => {
       store,
       cliente: cliente as unknown as RhApiClient,
       aoReceberToken,
+      prazoFinal: Date.now() + 15_000,
     }).invoke({ pergunta }) as Promise<EstadoAgenteType>;
 
   it('rota kb: responde com fundamentação em documento e cita a fonte', async () => {

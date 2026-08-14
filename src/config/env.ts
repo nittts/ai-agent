@@ -22,8 +22,10 @@ export const envSchema = z
     COST_PER_1M_INPUT_USD: z.coerce.number().nonnegative().default(0.3),
     COST_PER_1M_OUTPUT_USD: z.coerce.number().nonnegative().default(2.5),
 
-    LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+    LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000),
     LLM_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+
+    REQUEST_DEADLINE_MS: z.coerce.number().int().positive().default(15_000),
     TOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
     TOOL_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(1),
 

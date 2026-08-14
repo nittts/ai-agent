@@ -1,0 +1,26 @@
+Benchmark de latência — modelo=gemini-3.5-flash-lite modo=frio rodadas=3
+gerado em 2026-08-14T20:56:06.817Z
+
+grupo              n      p50      p95      p99      min      max   custo médio
+-------------------------------------------------------------------------------
+TODAS             75     2225    15005    15016      746    15016   US$0.000452
+
+rota kb           31     2453    15014    15016     1284    15016   US$0.000581
+rota tool         24     2139    15005    15005      746    15005   US$0.000318
+rota hybrid        8     3166    15004    15004     1965    15004   US$0.000771
+rota out_of_scope  12      876     4510     4510      801     4510   US$0.000175
+
+kb_simples        18     2436    15016    15016     1590    15016   US$0.000503
+kb_multi          12     2443     6344     6344     1284     6344   US$0.000746
+tool              15     2557    15005    15005     1222    15005   US$0.000370
+hibrida           12     3261    15014    15014     1529    15014   US$0.000601
+fora_de_escopo     9      876     4510     4510      801     4510   US$0.000179
+adversarial        9      920     8987     8987      746     8987   US$0.000170
+
+falhas de infraestrutura (degradado=true): 14/75 (18.7%)
+percentis EXCLUINDO requests degradados — o desempenho do agente quando o provedor responde:
+  n=61  p50=2141ms  p95=4703ms  p99=6617ms  max=6617ms
+
+tempos em ms · percentil por "nearest rank" (valor observado, não interpolado)
+custo total do benchmark: US$0.033900  ·  tokens: 58357
+CSV: eval/results/latency.csv

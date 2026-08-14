@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import type { Env } from '../config/env';
+import { comTimeout } from '../tools/resiliencia';
 
 export interface EmbeddingsPort {
   embedarConsulta(texto: string): Promise<number[]>;
@@ -16,9 +17,12 @@ export class GeminiEmbeddings implements EmbeddingsPort {
   readonly dimensoes = 3072;
 
   private readonly cliente: GoogleGenerativeAIEmbeddings;
+  private readonly timeoutMs: number;
 
   constructor(env: Env) {
     this.nomeModelo = env.GEMINI_EMBED_MODEL;
+
+    this.timeoutMs = env.LLM_TIMEOUT_MS;
     this.cliente = new GoogleGenerativeAIEmbeddings({
       apiKey: env.GEMINI_API_KEY,
       model: env.GEMINI_EMBED_MODEL,
@@ -26,7 +30,7 @@ export class GeminiEmbeddings implements EmbeddingsPort {
   }
 
   embedarConsulta(texto: string): Promise<number[]> {
-    return this.cliente.embedQuery(texto);
+    return comTimeout(this.cliente.embedQuery(texto), this.timeoutMs);
   }
 
   embedarDocumentos(textos: string[]): Promise<number[][]> {

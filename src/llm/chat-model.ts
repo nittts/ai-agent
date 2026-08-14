@@ -3,6 +3,7 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { z } from 'zod';
 import type { Env } from '../config/env';
 import { LeitorSse } from './sse';
+import { comTimeout } from '../tools/resiliencia';
 
 export interface UsoTokens {
   entrada: number;
@@ -21,6 +22,8 @@ export interface ParamsEstruturado<T> {
 
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   nomeSchema: string;
+
+  timeoutMs?: number;
 }
 
 export interface ParamsGeracao {
@@ -28,6 +31,8 @@ export interface ParamsGeracao {
   usuario: string;
 
   aoReceberToken?: (token: string) => void;
+
+  timeoutMs?: number;
 }
 
 export interface ChatModelPort {
@@ -77,16 +82,17 @@ export class GeminiChatModel implements ChatModelPort {
     usuario,
     schema,
     nomeSchema,
+    timeoutMs,
   }: ParamsEstruturado<T>): Promise<{ dados: T; uso: UsoTokens }> {
     const comSchema = this.modelo.withStructuredOutput(schema, {
       name: nomeSchema,
       includeRaw: true,
     });
 
-    const resposta = (await comSchema.invoke([
-      new SystemMessage(sistema),
-      new HumanMessage(usuario),
-    ])) as { parsed: T; raw?: { usage_metadata?: MetadadosUso } };
+    const resposta = (await comTimeout(
+      comSchema.invoke([new SystemMessage(sistema), new HumanMessage(usuario)]),
+      timeoutMs ?? this.timeoutMs,
+    )) as { parsed: T; raw?: { usage_metadata?: MetadadosUso } };
 
     return { dados: resposta.parsed, uso: extrairUso(resposta.raw?.usage_metadata) };
   }
@@ -95,6 +101,7 @@ export class GeminiChatModel implements ChatModelPort {
     sistema,
     usuario,
     aoReceberToken,
+    timeoutMs,
   }: ParamsGeracao): Promise<{ texto: string; uso: UsoTokens }> {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${this.nomeModelo}` +
@@ -108,7 +115,7 @@ export class GeminiChatModel implements ChatModelPort {
         contents: [{ role: 'user', parts: [{ text: usuario }] }],
         generationConfig: { temperature: 0 },
       }),
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs ?? this.timeoutMs),
     });
 
     if (!resposta.ok || !resposta.body) {
