@@ -53,6 +53,7 @@ export class AgentService {
             ttftMs: null,
             retrievalMs: null,
             llmMs: null,
+            porNo: null,
           },
 
           custo: { tokensEntrada: 0, tokensSaida: 0, custoUsd: 0 },
@@ -130,6 +131,7 @@ export class AgentService {
         retrievalMs: tempos.recuperar ?? null,
 
         llmMs: (tempos.classificar ?? 0) + (tempos.responder ?? 0) || null,
+        porNo: Object.keys(tempos).length > 0 ? tempos : null,
       },
       custo: {
         tokensEntrada: estado.uso.entrada,

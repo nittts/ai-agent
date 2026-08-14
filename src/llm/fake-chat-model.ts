@@ -48,9 +48,10 @@ export class FakeChatModel implements ChatModelPort {
     const idColaborador = /\b(?:id|matricula|colaborador)\D{0,12}(\d{3,6})\b/.exec(t)?.[1];
     const idChamado = /\bchamado\D{0,12}(\d{3,6})\b/.exec(t)?.[1];
 
-    const foraDeEscopo = /(previsao do tempo|tempo em |investiment|faturou|faturamento|bolsa|acoes da)/.test(
-      t,
-    );
+    const foraDeEscopo =
+      /(previsao do tempo|\btempo em\b|\binvestiment\w*|\bfaturou\b|\bfaturamento\b|\bbolsa de valores\b|\bacoes da\b)/.test(
+        t,
+      );
     const injecao = /(ignore as instrucoes|revele o seu prompt|prompt de sistema|system prompt)/.test(
       t,
     );

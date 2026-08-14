@@ -3,75 +3,480 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Assistente RH/TI</title>
+    <title>Assistente RH/TI — console</title>
     <style>
+      /* ===================================================================
+         O console é um INSTRUMENTO, não um app de chat.
+         A conversa é a entrada; a evidência é o produto.
+         Toda cor codifica um estado — nenhuma é decorativa.
+         =================================================================== */
       :root {
         color-scheme: light dark;
-        --bg: #ffffff;
-        --fg: #16181d;
-        --muted: #6b7280;
-        --line: #e5e7eb;
-        --panel: #f9fafb;
+
+        --papel: #fbfaf7;
+        --painel: #f3f1ea;
+        --tinta: #14181f;
+        --tinta-fraca: #5a6270;
+        --regra: #e0dcd2;
+
+        --estrutura: #0e6b7a; /* teal: elementos estruturais, citações */
+        --ok: #1f7a4c; /* verde medido: cache HIT, sucesso */
+        --alerta: #a15c07; /* âmbar: degradado */
+        --neutro: #6b7280; /* recusa: sem drama, é comportamento correto */
+
+        --fonte-texto: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --fonte-dados: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
       }
+
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #101216;
-          --fg: #e8eaed;
-          --muted: #9aa1ab;
-          --line: #272b33;
-          --panel: #171a20;
+          --papel: #0f1216;
+          --painel: #151a21;
+          --tinta: #e7e5df;
+          --tinta-fraca: #9aa1ac;
+          --regra: #252b34;
+
+          --estrutura: #4fb3c4;
+          --ok: #57ab7d;
+          --alerta: #d9a441;
+          --neutro: #8b929d;
         }
       }
-      * { box-sizing: border-box; }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
       body {
         margin: 0;
-        background: var(--bg);
-        color: var(--fg);
-        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--papel);
+        color: var(--tinta);
+        font: 15px/1.6 var(--fonte-texto);
+        /* Números não devem tremer enquanto o painel atualiza durante o stream. */
+        font-variant-numeric: tabular-nums;
       }
-      header {
-        border-bottom: 1px solid var(--line);
-        padding: 14px 20px;
-        display: flex;
-        align-items: baseline;
-        gap: 12px;
-      }
-      h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; }
-      .sub { color: var(--muted); font-size: 13px; }
-      main { padding: 20px; }
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 14px 16px;
-        max-width: 560px;
-      }
-      .card h2 {
-        font-size: 11px;
+
+      /* ---- microrrótulo: usado em todo cabeçalho de seção ---------------- */
+      .rotulo {
+        font: 600 10.5px/1 var(--fonte-dados);
+        letter-spacing: 0.09em;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--muted);
-        margin: 0 0 8px;
+        color: var(--tinta-fraca);
+      }
+
+      /* ---- estrutura ---------------------------------------------------- */
+      .topo {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--regra);
+        flex-wrap: wrap;
+      }
+
+      .marca {
+        font-weight: 650;
+        font-size: 14px;
+        letter-spacing: -0.01em;
+        margin-right: auto;
+      }
+      .marca span {
+        color: var(--tinta-fraca);
+        font-weight: 400;
+      }
+
+      select,
+      button,
+      input {
+        font: inherit;
+        font-size: 13px;
+        color: inherit;
+        background: var(--papel);
+        border: 1px solid var(--regra);
+        border-radius: 6px;
+        padding: 6px 10px;
+      }
+      select {
+        max-width: min(46vw, 420px);
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--estrutura);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      :focus-visible {
+        outline: 2px solid var(--estrutura);
+        outline-offset: 2px;
+      }
+
+      /* Interruptor de falha: reconhecível, sem virar botão de perigo teatral. */
+      .interruptor {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--tinta-fraca);
+        cursor: pointer;
+        user-select: none;
+      }
+      .interruptor input {
+        accent-color: var(--alerta);
+        width: 15px;
+        height: 15px;
+        padding: 0;
+      }
+      .interruptor[data-ativo='true'] {
+        color: var(--alerta);
         font-weight: 600;
       }
-      pre {
-        margin: 0;
-        font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+
+      .palco {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        height: calc(100% - 53px);
+      }
+      @media (max-width: 860px) {
+        .palco {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+      }
+
+      /* ---- conversa ------------------------------------------------------ */
+      .conversa {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .transcricao {
+        flex: 1;
+        overflow-y: auto;
+        padding: 22px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+
+      .vazio {
+        margin: auto;
+        max-width: 420px;
+        text-align: center;
+        color: var(--tinta-fraca);
+        font-size: 14px;
+      }
+      .vazio strong {
+        display: block;
+        color: var(--tinta);
+        font-size: 15px;
+        margin-bottom: 6px;
+      }
+
+      .turno-pergunta {
+        font-weight: 600;
+        line-height: 1.45;
+      }
+      .turno-pergunta::before {
+        content: '';
+        display: inline-block;
+        width: 3px;
+        height: 1em;
+        background: var(--estrutura);
+        margin-right: 9px;
+        vertical-align: -0.15em;
+      }
+
+      .turno-resposta {
         white-space: pre-wrap;
+        max-width: 68ch;
+      }
+      .turno-resposta[data-recusado='true'] {
+        color: var(--neutro);
+        border-left: 2px solid var(--regra);
+        padding-left: 13px;
+      }
+
+      /* Marcadores [1] [2] ligam o texto às fontes do painel. */
+      .cit {
+        font: 600 11px/1 var(--fonte-dados);
+        color: var(--estrutura);
+        vertical-align: 0.25em;
+        padding: 0 1px;
+      }
+
+      .cursor::after {
+        content: '▌';
+        color: var(--estrutura);
+        animation: piscar 1.1s steps(2) infinite;
+      }
+      @keyframes piscar {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .selo {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 9px;
+        font: 600 10.5px/1 var(--fonte-dados);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--alerta);
+      }
+      .selo::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .composicao {
+        display: flex;
+        gap: 9px;
+        padding: 14px 24px 18px;
+        border-top: 1px solid var(--regra);
+      }
+      .composicao input {
+        flex: 1;
+      }
+
+      /* ---- painel de evidência ------------------------------------------ */
+      .evidencia {
+        background: var(--painel);
+        border-left: 1px solid var(--regra);
+        padding: 18px 18px 24px;
+        overflow-y: auto;
+        font-family: var(--fonte-dados);
+        font-size: 12px;
+      }
+      @media (max-width: 860px) {
+        .evidencia {
+          border-left: none;
+          border-top: 1px solid var(--regra);
+        }
+      }
+
+      .evidencia section + section {
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--regra);
+      }
+      .evidencia h2 {
+        margin: 0 0 11px;
+      }
+
+      /* Leitura estilo instrumento: RÓTULO ....... VALOR */
+      .leitura {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        padding: 3.5px 0;
+      }
+      .leitura dt {
+        color: var(--tinta-fraca);
+        white-space: nowrap;
+      }
+      .leitura .pontilhado {
+        flex: 1;
+        border-bottom: 1px dotted var(--regra);
+        transform: translateY(-3px);
+      }
+      .leitura dd {
+        margin: 0;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      dl {
+        margin: 0;
+      }
+
+      .v-ok {
+        color: var(--ok);
+      }
+      .v-alerta {
+        color: var(--alerta);
+      }
+      .v-neutro {
+        color: var(--neutro);
+      }
+
+      /* ---- cascata de latência (elemento-assinatura) --------------------- */
+      .cascata {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .faixa {
+        display: grid;
+        grid-template-columns: 82px 1fr 46px;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .faixa .nome {
+        color: var(--tinta-fraca);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .trilha {
+        height: 7px;
+        background: color-mix(in srgb, var(--regra) 55%, transparent);
+        border-radius: 2px;
+        position: relative;
+        overflow: hidden;
+      }
+      .barra {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: var(--estrutura);
+        border-radius: 2px;
+        transform-origin: left;
+        animation: crescer 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+      }
+      .barra[data-paralelo='true'] {
+        /* Hachura marca os nós que rodaram no MESMO superstep, em paralelo. */
+        background: repeating-linear-gradient(
+          -45deg,
+          var(--estrutura) 0 3px,
+          color-mix(in srgb, var(--estrutura) 45%, transparent) 3px 6px
+        );
+      }
+      .faixa .ms {
+        text-align: right;
+        font-weight: 600;
+      }
+      @keyframes crescer {
+        from {
+          transform: scaleX(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .barra {
+          animation: none;
+        }
+        .cursor::after {
+          animation: none;
+        }
+      }
+
+      /* ---- fontes -------------------------------------------------------- */
+      .fonte {
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        gap: 8px;
+        padding: 8px 0;
+      }
+      .fonte + .fonte {
+        border-top: 1px dotted var(--regra);
+      }
+      .fonte .n {
+        font-weight: 700;
+        color: var(--estrutura);
+      }
+      .fonte .onde {
+        font-weight: 600;
+        word-break: break-word;
+      }
+      .fonte .detalhe {
+        color: var(--tinta-fraca);
+        font-size: 11px;
+        margin-top: 2px;
+        word-break: break-word;
+      }
+      .fonte .trecho {
+        color: var(--tinta-fraca);
+        font-size: 11px;
+        line-height: 1.45;
+        margin-top: 4px;
+        font-family: var(--fonte-texto);
+        border-left: 2px solid var(--regra);
+        padding-left: 8px;
+      }
+
+      .aviso {
+        color: var(--alerta);
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+
+      .placeholder {
+        color: var(--tinta-fraca);
+        font-size: 11.5px;
       }
     </style>
   </head>
+
   <body>
-    <header>
-      <h1>Assistente RH/TI</h1>
-      <span class="sub">agente LangGraph · RAG + tools HTTP</span>
+    <header class="topo">
+      <div class="marca">Assistente RH/TI <span>· agente LangGraph</span></div>
+
+      <select id="presets" aria-label="Perguntas do roteiro">
+        <option value="">Perguntas do roteiro…</option>
+      </select>
+
+      <label class="interruptor" id="rotulo-chaos" data-ativo="false" hidden>
+        <input type="checkbox" id="chaos" />
+        Derrubar API de RH
+      </label>
     </header>
 
-    <main>
-      <div class="card">
-        <h2>Estado do serviço</h2>
-        <pre id="health">carregando…</pre>
-      </div>
+    <main class="palco">
+      <section class="conversa">
+        <div class="transcricao" id="transcricao">
+          <div class="vazio" id="vazio">
+            <strong>Pergunte algo sobre RH ou TI</strong>
+            Cada resposta mostra à direita de onde ela veio, quanto tempo levou e quanto custou.
+          </div>
+        </div>
+
+        <form class="composicao" id="form">
+          <input
+            id="entrada"
+            placeholder="Ex.: tenho 18 dias de férias (id 1042), posso vender 10?"
+            autocomplete="off"
+            aria-label="Sua pergunta"
+          />
+          <button type="submit" id="enviar">Perguntar</button>
+        </form>
+      </section>
+
+      <aside class="evidencia" id="evidencia">
+        <section>
+          <h2 class="rotulo">Medição</h2>
+          <dl id="medicao">
+            <p class="placeholder">Aguardando a primeira pergunta.</p>
+          </dl>
+        </section>
+
+        <section id="secao-cascata" hidden>
+          <h2 class="rotulo">Tempo por etapa do grafo</h2>
+          <div class="cascata" id="cascata"></div>
+        </section>
+
+        <section id="secao-fontes" hidden>
+          <h2 class="rotulo">Fontes consultadas</h2>
+          <div id="fontes"></div>
+        </section>
+
+        <section id="secao-avisos" hidden>
+          <h2 class="rotulo">Avisos</h2>
+          <div class="aviso" id="avisos"></div>
+        </section>
+      </aside>
     </main>
 
     <script src="/app.js"></script>

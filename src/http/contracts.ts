@@ -39,6 +39,8 @@ export interface Tempos {
   retrievalMs: number | null;
 
   llmMs: number | null;
+
+  porNo: Record<string, number> | null;
 }
 
 export interface AskRequest {
