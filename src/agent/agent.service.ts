@@ -23,7 +23,8 @@ export class AgentService {
     @Inject(CHAT_MODEL) private readonly modelo: ChatModelPort,
     @Inject(EMBEDDINGS) private readonly embeddings: EmbeddingsPort,
     @Inject(VECTOR_STORE) private readonly store: VectorStorePort,
-    private readonly cliente: RhApiClient,
+
+    @Inject(RhApiClient) private readonly cliente: RhApiClient,
   ) {}
 
   async perguntar(pergunta: string, opcoes: OpcoesPergunta = {}): Promise<AskResponse> {

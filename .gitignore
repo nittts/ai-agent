@@ -11,3 +11,4 @@ eval/index-snapshot.json
 
 # NÃO ignorar public/app.js: o bundle é commitado de propósito, para que o
 # avaliador não precise de nenhuma etapa de build para abrir o console.
+eval/index-test.json

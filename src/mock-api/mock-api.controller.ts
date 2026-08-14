@@ -21,7 +21,7 @@ import { bancosHoras, beneficios, chamados, saldosFerias } from './seed';
 @Controller('mock/v1')
 export class MockApiController {
   constructor(
-    private readonly chaos: ChaosService,
+    @Inject(ChaosService) private readonly chaos: ChaosService,
     @Inject(ENV) private readonly env: Env,
   ) {}
 

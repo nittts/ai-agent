@@ -1,11 +1,11 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { join } from 'node:path';
 import { AppModule } from './app.module';
+import { configurarApp } from './bootstrap';
 import { ENV } from './config/config.module';
 import type { Env } from './config/env';
-import { createLogger, newCorrelationId, runWithContext } from './observability/logger';
+import { createLogger } from './observability/logger';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -17,18 +17,7 @@ async function bootstrap(): Promise<void> {
   const env = app.get<Env>(ENV);
   const log = createLogger(env.LOG_LEVEL, env.NODE_ENV === 'development');
 
-  const fastify = app.getHttpAdapter().getInstance();
-  fastify.addHook('onRequest', (req, reply, done) => {
-    const incoming = req.headers['x-correlation-id'];
-    const correlationId = typeof incoming === 'string' && incoming ? incoming : newCorrelationId();
-    reply.header('x-correlation-id', correlationId);
-    runWithContext({ correlationId }, done);
-  });
-
-  await app.register(import('@fastify/static'), {
-    root: join(__dirname, '..', 'public'),
-    prefix: '/',
-  });
+  await configurarApp(app);
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
@@ -39,7 +28,7 @@ async function bootstrap(): Promise<void> {
       chatModel: env.LLM_PROVIDER === 'fake' ? 'fake' : env.GEMINI_CHAT_MODEL,
       cacheEnabled: env.CACHE_ENABLED && Boolean(env.REDIS_URL),
     },
-    'Assistente RH/TI no ar',
+    `Assistente RH/TI no ar — console em http://localhost:${env.PORT}`,
   );
 }
 

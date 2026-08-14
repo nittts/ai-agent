@@ -6,7 +6,8 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
-    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+    LOG_LEVEL: z.enum(['silent', 'fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
     LLM_PROVIDER: z.enum(['gemini', 'fake']).default('gemini'),
     GEMINI_API_KEY: z.preprocess(vazioComoAusente, z.string().min(1).optional()),
@@ -36,7 +37,7 @@ export const envSchema = z
       .default('true')
       .transform((v) => v === 'true'),
 
-    MOCK_API_BASE_URL: z.string().url().default('http://localhost:3000/mock/v1'),
+    MOCK_API_BASE_URL: z.string().url().default('http://127.0.0.1:3000/mock/v1'),
 
     CHAOS_ENABLED: z
       .enum(['true', 'false'])

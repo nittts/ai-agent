@@ -5,6 +5,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
+
+    /**
+     * Gera o índice de teste antes de tudo. Os e2e sobem o AppModule real, que
+     * carrega o snapshot do disco no boot — sem ele, toda rota kb seria
+     * recusada e a suíte falharia por infraestrutura, não por defeito.
+     */
+    globalSetup: ['./test/global-setup.ts'],
     /**
      * A suíte inteira roda com o provider fake e sem Redis. Isso não é uma
      * conveniência: é o que garante que `npm test` passe verde sem nenhuma
@@ -33,6 +40,9 @@ export default defineConfig({
        * pontua ~0.16, bem abaixo de qualquer pergunta legítima.
        */
       RETRIEVAL_MIN_SCORE: '0.18',
+
+      /** Índice gerado pelo globalSetup, separado do índice real de produção. */
+      INDEX_PATH: './eval/index-test.json',
     },
     testTimeout: 15_000,
     hookTimeout: 15_000,
