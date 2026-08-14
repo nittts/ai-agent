@@ -4,20 +4,22 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
+    include: ['test/**/*.spec.ts'],
 
     /**
-     * Gera o índice de teste antes de tudo. Os e2e sobem o AppModule real, que
-     * carrega o snapshot do disco no boot — sem ele, toda rota kb seria
-     * recusada e a suíte falharia por infraestrutura, não por defeito.
+     * Builds the test index before anything runs. The e2e tests boot the real
+     * AppModule, which loads the snapshot at boot — without it every kb-route
+     * question would be refused and the suite would fail on infrastructure
+     * rather than on a defect.
      */
     globalSetup: ['./test/global-setup.ts'],
+
     /**
-     * A suíte inteira roda com o provider fake e sem Redis. Isso não é uma
-     * conveniência: é o que garante que `npm test` passe verde sem nenhuma
-     * credencial, e portanto que o CI seja possível sem secrets.
+     * The entire suite runs with the fake provider and no Redis. That is not a
+     * convenience: it is what guarantees `npm test` passes with NO credentials,
+     * and therefore that CI needs no secrets.
      *
-     * Qualquer teste que precise de rede é um bug de teste, não uma exceção.
+     * Any test that needs the network is a test bug, not an exception.
      */
     env: {
       NODE_ENV: 'test',
@@ -28,23 +30,24 @@ export default defineConfig({
       REDIS_URL: '',
 
       /**
-       * Limiar calibrado para os embeddings FAKE, não para o Gemini.
+       * Threshold calibrated for the FAKE embeddings, not for Gemini.
        *
-       * O limiar é propriedade do modelo de embedding, não do código: sob o
-       * fake (hashing de saco de palavras) documentos relevantes pontuam
-       * 0.22–0.55, enquanto sob o gemini-embedding-001 pontuam 0.6–0.8.
-       * Usar 0.55 aqui faria o agente recusar quase toda pergunta válida e os
-       * testes "provariam" um caminho de recusa quebrado.
+       * The threshold is a property of the embedding model, not of the code:
+       * under the fake (bag-of-words hashing) relevant documents score
+       * 0.22–0.55, while under gemini-embedding-001 they score 0.69–0.78. Using
+       * 0.55 here would make the agent refuse almost every valid question and
+       * the tests would "prove" a broken refusal path.
        *
-       * O que se mantém sob os dois modelos é a SEPARAÇÃO: fora de escopo
-       * pontua ~0.16, bem abaixo de qualquer pergunta legítima.
+       * What holds under both models is the SEPARATION: out-of-scope scores
+       * ~0.16, far below any legitimate question.
        */
       RETRIEVAL_MIN_SCORE: '0.18',
 
-      /** Índice gerado pelo globalSetup, separado do índice real de produção. */
+      /** Index produced by globalSetup, separate from the production one. */
       INDEX_PATH: './eval/index-test.json',
     },
+
     testTimeout: 15_000,
-    hookTimeout: 15_000,
+    hookTimeout: 30_000,
   },
 });

@@ -11,7 +11,7 @@
     "build:web": "esbuild web/app.ts --bundle --format=iife --target=es2022 --outfile=public/app.js",
     "start": "node dist/main.js",
     "dev": "tsx watch src/main.ts",
-    "cli": "tsx src/cli.ts",
+    "cli": "tsx src/presentation/cli/cli.ts",
     "ingest": "tsx scripts/ingest.ts",
     "bench:latency": "tsx scripts/bench-latency.ts",
     "bench:load": "tsx scripts/bench-load.ts",

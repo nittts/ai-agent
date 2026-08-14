@@ -1,127 +1,128 @@
-import type { AskResponse, Fonte, SseEvent } from '../src/http/contracts';
-
-interface PerguntaDemo {
-  id: string;
-  categoria: string;
-  texto: string;
-  esperado: string;
-  docEsperado: string | null;
-}
+import type { AskResponse, DemoQuestion, Source, SseEvent } from '../src/presentation/http/api-contract';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
-  if (!node) throw new Error(`Elemento #${id} não existe no index.html`);
+  if (!node) throw new Error(`Element #${id} is missing from index.html`);
   return node as T;
 };
 
-const criar = (tag: string, classe?: string, texto?: string): HTMLElement => {
-  const el = document.createElement(tag);
-  if (classe) el.className = classe;
-  if (texto !== undefined) el.textContent = texto;
-  return el;
+const el = (tag: string, className?: string, text?: string): HTMLElement => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 };
 
-const linhaLeitura = (rotulo: string, valor: string, classe = ''): HTMLElement => {
-  const linha = criar('div', 'leitura');
-  linha.append(
-    criar('dt', '', rotulo),
-    criar('span', 'pontilhado'),
-    criar('dd', classe, valor),
-  );
-  return linha;
+const readout = (label: string, value: string, className = ''): HTMLElement => {
+  const row = el('div', 'readout');
+  row.append(el('dt', '', label), el('span', 'leader'), el('dd', className, value));
+  return row;
 };
 
-const ms = (v: number | null): string => (v === null ? '—' : `${v} ms`);
+const ms = (value: number | null): string => (value === null ? '—' : `${value} ms`);
 
-const transcricao = $('transcricao');
-const vazio = $('vazio');
-const entrada = $<HTMLInputElement>('entrada');
-const enviar = $<HTMLButtonElement>('enviar');
+const transcript = $('transcript');
+const empty = $('empty');
+const input = $<HTMLInputElement>('input');
+const send = $<HTMLButtonElement>('send');
 const form = $<HTMLFormElement>('form');
 const presets = $<HTMLSelectElement>('presets');
 const chaos = $<HTMLInputElement>('chaos');
-const rotuloChaos = $('rotulo-chaos');
+const chaosLabel = $('chaos-label');
 
-const medicao = $('medicao');
-const cascata = $('cascata');
-const fontesEl = $('fontes');
-const avisosEl = $('avisos');
-const secaoCascata = $('secao-cascata');
-const secaoFontes = $('secao-fontes');
-const secaoAvisos = $('secao-avisos');
+const measurements = $('measurements');
+const waterfall = $('waterfall');
+const waterfallNote = $('waterfall-note');
+const sourcesEl = $('sources');
+const warningsEl = $('warnings');
+const waterfallSection = $('waterfall-section');
+const sourcesSection = $('sources-section');
+const warningsSection = $('warnings-section');
 
-let ocupado = false;
+let busy = false;
 
-function renderMedicao(r: AskResponse): void {
-  medicao.replaceChildren();
+const ROUTE_LABELS: Record<string, string> = {
+  kb: 'políticas',
+  tool: 'dados do RH',
+  hybrid: 'políticas + RH',
+  outOfScope: 'fora de escopo',
+};
 
-  const classeCache = r.cache === 'HIT' ? 'v-ok' : r.cache === 'OFF' ? 'v-neutro' : '';
-  const estado = r.recusado ? 'recusado' : r.degradado ? 'degradado' : 'respondido';
-  const classeEstado = r.degradado ? 'v-alerta' : r.recusado ? 'v-neutro' : 'v-ok';
+function renderMeasurements(result: AskResponse): void {
+  measurements.replaceChildren();
 
-  medicao.append(
-    linhaLeitura('rota', r.rota),
-    linhaLeitura('estado', estado, classeEstado),
-    linhaLeitura('cache', r.cache, classeCache),
-    linhaLeitura('1º token', ms(r.tempos.ttftMs)),
-    linhaLeitura('total', ms(r.tempos.totalMs)),
-    linhaLeitura('tokens', `${r.custo.tokensEntrada} / ${r.custo.tokensSaida}`),
-    linhaLeitura(
+  const cacheClass =
+    result.cache === 'HIT' ? 'pill v-ok' : result.cache === 'OFF' ? 'v-neutral' : 'pill';
+
+  const state = result.refused ? 'recusado' : result.degraded ? 'degradado' : 'respondido';
+  const stateClass = result.degraded ? 'pill v-warn' : result.refused ? 'v-neutral' : 'pill v-ok';
+
+  measurements.append(
+    readout('rota', ROUTE_LABELS[result.route] ?? result.route, 'pill v-accent'),
+    readout('estado', state, stateClass),
+    readout('cache', result.cache, cacheClass),
+    readout('1º token', ms(result.timings.ttftMs)),
+    readout('total', ms(result.timings.totalMs)),
+    readout('tokens', `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
+    readout(
       'custo',
 
-      r.custo.custoUsd === 0 ? 'US$ 0' : `US$ ${r.custo.custoUsd.toFixed(6)}`,
-      r.custo.custoUsd === 0 ? 'v-ok' : '',
+      result.cost.usd === 0 ? 'US$ 0' : `US$ ${result.cost.usd.toFixed(6)}`,
+      result.cost.usd === 0 ? 'v-ok' : '',
     ),
   );
 }
 
-function renderCascata(porNo: Record<string, number> | null): void {
-  cascata.replaceChildren();
+function renderWaterfall(perNode: Record<string, number> | null): void {
+  waterfall.replaceChildren();
+  waterfallNote.textContent = '';
 
-  if (!porNo || Object.keys(porNo).length === 0) {
-    secaoCascata.hidden = true;
+  if (!perNode || Object.keys(perNode).length === 0) {
+    waterfallSection.hidden = true;
     return;
   }
 
-  const ordem = ['classificar', 'recuperar', 'consultarApi', 'avaliar', 'responder'];
+  const order = ['classify', 'retrieve', 'callHrApi', 'grade', 'generateAnswer', 'refuse'];
 
-  const houveFanOut = 'recuperar' in porNo && 'consultarApi' in porNo;
-  const paralelos = new Set(houveFanOut ? ['recuperar', 'consultarApi'] : []);
+  const hadFanOut = 'retrieve' in perNode && 'callHrApi' in perNode;
+  const parallel = new Set(hadFanOut ? ['retrieve', 'callHrApi'] : []);
 
-  const entradas = ordem
-    .filter((nome) => nome in porNo)
-    .map((nome) => ({ nome, dur: porNo[nome] }));
+  const entries = order.filter((name) => name in perNode).map((name) => ({ name, ms: perNode[name] }));
 
-  if (entradas.length === 0) {
-    secaoCascata.hidden = true;
+  if (entries.length === 0) {
+    waterfallSection.hidden = true;
     return;
   }
 
-  const maior = Math.max(...entradas.map((e) => e.dur), 1);
+  const longest = Math.max(...entries.map((e) => e.ms), 1);
 
-  for (const { nome, dur } of entradas) {
-    const faixa = criar('div', 'faixa');
-    const trilha = criar('div', 'trilha');
-    const barra = criar('div', 'barra');
+  for (const { name, ms: duration } of entries) {
+    const lane = el('div', 'lane');
+    const track = el('div', 'track');
+    const bar = el('div', 'bar');
 
-    barra.style.width = `${Math.max(2, (dur / maior) * 100)}%`;
-    if (paralelos.has(nome)) barra.dataset.paralelo = 'true';
+    bar.style.width = `${Math.max(2, (duration / longest) * 100)}%`;
+    if (parallel.has(name)) bar.dataset.parallel = 'true';
 
-    trilha.append(barra);
-    faixa.append(criar('span', 'nome', nome), trilha, criar('span', 'ms', String(dur)));
-    cascata.append(faixa);
+    track.append(bar);
+    lane.append(el('span', 'name', name), track, el('span', 'ms', String(duration)));
+    waterfall.append(lane);
   }
 
-  secaoCascata.hidden = false;
+  waterfallNote.textContent = hadFanOut
+    ? 'As barras hachuradas rodaram em paralelo, no mesmo superstep do grafo — somá-las superestimaria o total.'
+    : '';
+
+  waterfallSection.hidden = false;
 }
 
-function renderFontes(fontes: Fonte[]): void {
-  fontesEl.replaceChildren();
+function renderSources(sources: Source[]): void {
+  sourcesEl.replaceChildren();
 
-  if (fontes.length === 0) {
-    secaoFontes.hidden = false;
-    fontesEl.append(
-      criar(
+  if (sources.length === 0) {
+    sourcesSection.hidden = false;
+    sourcesEl.append(
+      el(
         'p',
         'placeholder',
         'Nenhuma fonte citada — a resposta foi uma recusa, e recusar sem fundamentação é o comportamento correto.',
@@ -130,187 +131,195 @@ function renderFontes(fontes: Fonte[]): void {
     return;
   }
 
-  fontes.forEach((fonte, i) => {
-    const bloco = criar('div', 'fonte');
-    const corpo = criar('div');
+  sources.forEach((source, i) => {
+    const block = el('div', 'source');
+    const body = el('div');
 
-    if (fonte.tipo === 'documento') {
-      corpo.append(criar('div', 'onde', `${fonte.arquivo} § ${fonte.secao}`));
-      corpo.append(criar('div', 'detalhe', `similaridade ${fonte.score.toFixed(3)}`));
-      corpo.append(criar('div', 'trecho', fonte.trecho));
+    if (source.kind === 'document') {
+      body.append(el('div', 'where', `${source.file} § ${source.section}`));
+      body.append(el('div', 'detail', `similaridade ${source.score.toFixed(3)}`));
+      body.append(el('div', 'excerpt', source.excerpt));
     } else {
-      corpo.append(criar('div', 'onde', fonte.endpoint));
-      corpo.append(
-        criar('div', 'detalhe', `campos: ${fonte.campos.join(', ')} · ${fonte.latenciaMs} ms`),
+      body.append(el('div', 'where', source.endpoint));
+      body.append(
+        el('div', 'detail', `campos: ${source.fields.join(', ')} · ${source.latencyMs} ms`),
       );
     }
 
-    bloco.append(criar('div', 'n', String(i + 1)), corpo);
-    fontesEl.append(bloco);
+    block.append(el('div', 'n', String(i + 1)), body);
+    sourcesEl.append(block);
   });
 
-  secaoFontes.hidden = false;
+  sourcesSection.hidden = false;
 }
 
-function renderAvisos(avisos: string[]): void {
-  avisosEl.replaceChildren();
-  secaoAvisos.hidden = avisos.length === 0;
-  for (const aviso of avisos) avisosEl.append(criar('div', '', `• ${aviso}`));
+function renderWarnings(warnings: string[]): void {
+  warningsEl.replaceChildren();
+  warningsSection.hidden = warnings.length === 0;
+  for (const warning of warnings) warningsEl.append(el('div', '', `• ${warning}`));
 }
 
-function pintarCitacoes(alvo: HTMLElement, texto: string): void {
-  alvo.replaceChildren();
+function paintCitations(target: HTMLElement, text: string): void {
+  target.replaceChildren();
 
-  const partes = texto.split(/(\[\d+\])/g);
-  for (const parte of partes) {
-    if (/^\[\d+\]$/.test(parte)) alvo.append(criar('sup', 'cit', parte));
-    else alvo.append(document.createTextNode(parte));
+  for (const part of text.split(/(\[\d+\])/g)) {
+    if (/^\[\d+\]$/.test(part)) target.append(el('sup', 'cite', part));
+    else target.append(document.createTextNode(part));
   }
 }
 
-function adicionarPergunta(texto: string): void {
-  vazio.remove();
-  transcricao.append(criar('div', 'turno-pergunta', texto));
+function addQuestion(text: string): void {
+  empty.remove();
+  const turn = el('div', 'turn-question');
+  turn.append(el('span', '', text));
+  transcript.append(turn);
 }
 
-function adicionarResposta(): HTMLElement {
-  const el = criar('div', 'turno-resposta cursor');
-  transcricao.append(el);
-  return el;
+function addAnswer(): HTMLElement {
+  const node = el('div', 'turn-answer caret');
+  transcript.append(node);
+  return node;
 }
 
-const rolar = () => transcricao.scrollTo({ top: transcricao.scrollHeight, behavior: 'smooth' });
+const scroll = () => transcript.scrollTo({ top: transcript.scrollHeight, behavior: 'smooth' });
 
-function perguntar(texto: string): void {
-  if (ocupado || !texto.trim()) return;
+function ask(text: string): void {
+  if (busy || !text.trim()) return;
 
-  ocupado = true;
-  enviar.disabled = true;
-  entrada.value = '';
+  busy = true;
+  send.disabled = true;
+  input.value = '';
 
-  adicionarPergunta(texto);
-  const alvo = adicionarResposta();
-  rolar();
+  addQuestion(text);
+  const target = addAnswer();
+  scroll();
 
-  let acumulado = '';
-  const fonte = new EventSource(`/ask/stream?q=${encodeURIComponent(texto)}`);
+  let accumulated = '';
+  const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
 
-  const encerrar = () => {
-    fonte.close();
-    alvo.classList.remove('cursor');
-    ocupado = false;
-    enviar.disabled = false;
-    entrada.focus();
+  const finish = () => {
+    stream.close();
+    target.classList.remove('caret');
+    busy = false;
+    send.disabled = false;
+    input.focus();
   };
 
-  fonte.onmessage = (evento) => {
-    const dados = JSON.parse(evento.data) as SseEvent;
+  stream.onmessage = (message) => {
+    const event = JSON.parse(message.data) as SseEvent;
 
-    switch (dados.tipo) {
+    switch (event.type) {
       case 'token':
-        acumulado += dados.texto;
-        pintarCitacoes(alvo, acumulado);
-        rolar();
+        accumulated += event.text;
+        paintCitations(target, accumulated);
+        scroll();
         break;
 
-      case 'fontes':
-        renderFontes(dados.fontes);
+      case 'sources':
+        renderSources(event.sources);
         break;
 
-      case 'fim': {
-        const r = dados.resumo;
-        if (r.recusado) alvo.dataset.recusado = 'true';
+      case 'done': {
+        const result = event.summary;
+        if (result.refused) target.dataset.refused = 'true';
 
-        if (!acumulado && r.resposta) pintarCitacoes(alvo, r.resposta);
+        if (!accumulated && result.answer) paintCitations(target, result.answer);
 
-        if (r.degradado) {
-          alvo.append(criar('div', 'selo', 'respondido com uma fonte indisponível'));
+        if (result.degraded) {
+          target.append(el('div', 'badge', 'respondido com uma fonte indisponível'));
         }
 
-        renderMedicao(r);
-        renderCascata(r.tempos.porNo);
-        renderAvisos(r.avisos);
-        rolar();
-        encerrar();
+        renderMeasurements(result);
+        renderWaterfall(result.timings.perNode);
+        renderWarnings(result.warnings);
+        scroll();
+        finish();
         break;
       }
 
-      case 'erro':
-        alvo.textContent = `Falha ao responder: ${dados.mensagem} (correlationId ${dados.correlationId})`;
-        encerrar();
+      case 'error':
+        target.textContent = `Falha ao responder: ${event.message} (correlationId ${event.correlationId})`;
+        finish();
         break;
     }
   };
 
-  fonte.onerror = () => {
-    if (!acumulado) alvo.textContent = 'Conexão interrompida. O serviço está no ar?';
-    encerrar();
+  stream.onerror = () => {
+    if (!accumulated) target.textContent = 'Conexão interrompida. O serviço está no ar?';
+    finish();
   };
 }
 
-async function carregarPresets(): Promise<void> {
-  try {
-    const resposta = await fetch('/demo/perguntas');
-    if (!resposta.ok) return;
+const CATEGORY_LABELS: Record<string, string> = {
+  kbSimple: 'política — direta',
+  kbMulti: 'política — múltiplos documentos',
+  tool: 'dados do colaborador',
+  hybrid: 'política + dados',
+  outOfScope: 'fora de escopo',
+  adversarial: 'adversarial',
+};
 
-    const { perguntas, chaosDisponivel } = (await resposta.json()) as {
-      perguntas: PerguntaDemo[];
-      chaosDisponivel: boolean;
+async function loadPresets(): Promise<void> {
+  try {
+    const response = await fetch('/demo/questions');
+    if (!response.ok) return;
+
+    const { questions, chaosAvailable } = (await response.json()) as {
+      questions: DemoQuestion[];
+      chaosAvailable: boolean;
     };
 
-    const categorias = [...new Set(perguntas.map((p) => p.categoria))];
+    for (const category of [...new Set(questions.map((q) => q.category))]) {
+      const group = document.createElement('optgroup');
+      group.label = CATEGORY_LABELS[category] ?? category;
 
-    for (const categoria of categorias) {
-      const grupo = document.createElement('optgroup');
-      grupo.label = categoria.replace(/_/g, ' ');
-
-      for (const pergunta of perguntas.filter((p) => p.categoria === categoria)) {
-        const opcao = document.createElement('option');
-        opcao.value = pergunta.texto;
-        opcao.textContent = pergunta.texto;
-        opcao.title = `Esperado: ${pergunta.esperado}`;
-        grupo.append(opcao);
+      for (const question of questions.filter((q) => q.category === category)) {
+        const option = document.createElement('option');
+        option.value = question.text;
+        option.textContent = question.text;
+        option.title = `Esperado: ${question.expected}`;
+        group.append(option);
       }
 
-      presets.append(grupo);
+      presets.append(group);
     }
 
-    rotuloChaos.hidden = !chaosDisponivel;
+    chaosLabel.hidden = !chaosAvailable;
   } catch {
     void 0;
   }
 }
 
-async function alternarChaos(ativo: boolean): Promise<void> {
-  rotuloChaos.dataset.ativo = String(ativo);
+async function toggleChaos(on: boolean): Promise<void> {
+  chaosLabel.dataset.on = String(on);
 
   try {
     await fetch('/mock/v1/_chaos', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ modo: ativo ? '500' : 'ok' }),
+      body: JSON.stringify({ mode: on ? '500' : 'ok' }),
     });
   } catch {
-    chaos.checked = !ativo;
-    rotuloChaos.dataset.ativo = String(!ativo);
+    chaos.checked = !on;
+    chaosLabel.dataset.on = String(!on);
   }
 }
 
-form.addEventListener('submit', (evento) => {
-  evento.preventDefault();
-  perguntar(entrada.value);
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  ask(input.value);
 });
 
 presets.addEventListener('change', () => {
-  const escolhida = presets.value;
-  if (!escolhida) return;
+  const chosen = presets.value;
+  if (!chosen) return;
 
-  entrada.value = escolhida;
+  input.value = chosen;
   presets.selectedIndex = 0;
-  perguntar(escolhida);
+  ask(chosen);
 });
 
-chaos.addEventListener('change', () => void alternarChaos(chaos.checked));
+chaos.addEventListener('change', () => void toggleChaos(chaos.checked));
 
-void carregarPresets();
-entrada.focus();
+void loadPresets();
+input.focus();

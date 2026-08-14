@@ -1,85 +1,88 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { loadEnv } from '../src/config/env';
-import { gerarChunks, calcularCorpusVersion, type DocumentoBruto } from '../src/retrieval/chunker';
-import { criarEmbeddings } from '../src/llm/embeddings';
-import type { EmbeddedChunk, IndexSnapshot } from '../src/retrieval/types';
+import { loadEnv } from '../src/infrastructure/config/env';
+import {
+  buildChunks,
+  computeCorpusVersion,
+  type RawDocument,
+} from '../src/infrastructure/retrieval/chunker';
+import { createEmbeddings } from '../src/infrastructure/llm/embeddings.factory';
+import type { EmbeddedChunk, IndexSnapshot } from '../src/domain/knowledge';
 
-const TAMANHO_LOTE = 32;
+const BATCH_SIZE = 32;
 
-async function lerCorpus(caminho: string): Promise<DocumentoBruto[]> {
-  const arquivos = (await readdir(caminho)).filter((f) => f.endsWith('.md')).sort();
+async function readCorpus(path: string): Promise<RawDocument[]> {
+  const files = (await readdir(path)).filter((f) => f.endsWith('.md')).sort();
 
-  if (arquivos.length === 0) {
-    throw new Error(`Nenhum arquivo .md encontrado em ${caminho}`);
-  }
+  if (files.length === 0) throw new Error(`No .md files found in ${path}`);
 
   return Promise.all(
-    arquivos.map(async (arquivo) => ({
-      arquivo,
-      conteudo: await readFile(join(caminho, arquivo), 'utf-8'),
+    files.map(async (file) => ({
+      file,
+      content: await readFile(join(path, file), 'utf-8'),
     })),
   );
 }
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const inicio = Date.now();
+  const startedAt = Date.now();
 
-  const caminhoCorpus = resolve(process.cwd(), env.CORPUS_PATH);
-  const caminhoIndice = resolve(process.cwd(), env.INDEX_PATH);
+  const corpusPath = resolve(process.cwd(), env.CORPUS_PATH);
+  const indexPath = resolve(process.cwd(), env.INDEX_PATH);
 
-  console.log(`Lendo corpus de ${caminhoCorpus}`);
-  const documentos = await lerCorpus(caminhoCorpus);
-  const corpusVersion = calcularCorpusVersion(documentos);
-  console.log(`  ${documentos.length} documentos, corpusVersion=${corpusVersion}`);
+  console.log(`Reading corpus from ${corpusPath}`);
+  const documents = await readCorpus(corpusPath);
+  const corpusVersion = computeCorpusVersion(documents);
+  console.log(`  ${documents.length} documents, corpusVersion=${corpusVersion}`);
 
-  const chunks = await gerarChunks(documentos);
-  console.log(`  ${chunks.length} chunks gerados`);
+  const chunks = await buildChunks(documents);
+  console.log(`  ${chunks.length} chunks produced`);
 
-  const embeddings = criarEmbeddings(env);
-  console.log(`Embeddando com ${embeddings.nomeModelo} (provider=${env.LLM_PROVIDER})`);
+  const embeddings = createEmbeddings(env);
+  console.log(`Embedding with ${embeddings.modelName} (provider=${env.LLM_PROVIDER})`);
 
-  const embedados: EmbeddedChunk[] = [];
+  const embedded: EmbeddedChunk[] = [];
 
-  for (let i = 0; i < chunks.length; i += TAMANHO_LOTE) {
-    const lote = chunks.slice(i, i + TAMANHO_LOTE);
-    const vetores = await embeddings.embedarDocumentos(lote.map((c) => c.texto));
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    const vectors = await embeddings.embedDocuments(batch.map((c) => c.text));
 
-    if (vetores.length !== lote.length) {
+    if (vectors.length !== batch.length) {
       throw new Error(
-        `Provider devolveu ${vetores.length} vetores para ${lote.length} textos. Ingestão abortada para não gravar índice desalinhado.`,
+        `Provider returned ${vectors.length} vectors for ${batch.length} texts. ` +
+          'Aborting so a misaligned index is never written.',
       );
     }
 
-    lote.forEach((chunk, indice) => embedados.push({ ...chunk, embedding: vetores[indice] }));
-    console.log(`  ${Math.min(i + TAMANHO_LOTE, chunks.length)}/${chunks.length}`);
+    batch.forEach((chunk, index) => embedded.push({ ...chunk, embedding: vectors[index] }));
+    console.log(`  ${Math.min(i + BATCH_SIZE, chunks.length)}/${chunks.length}`);
   }
 
-  const dimensoes = embedados[0]?.embedding.length ?? 0;
-  if (dimensoes === 0) throw new Error('Embeddings vazios — nada a gravar.');
+  const dimensions = embedded[0]?.embedding.length ?? 0;
+  if (dimensions === 0) throw new Error('Empty embeddings — nothing to write.');
 
   const snapshot: IndexSnapshot = {
     corpusVersion,
-    modeloEmbedding: embeddings.nomeModelo,
-    dimensoes,
-    geradoEm: new Date().toISOString(),
-    chunks: embedados,
+    embeddingModel: embeddings.modelName,
+    dimensions,
+    generatedAt: new Date().toISOString(),
+    chunks: embedded,
   };
 
-  await mkdir(dirname(caminhoIndice), { recursive: true });
-  await writeFile(caminhoIndice, JSON.stringify(snapshot), 'utf-8');
+  await mkdir(dirname(indexPath), { recursive: true });
+  await writeFile(indexPath, JSON.stringify(snapshot), 'utf-8');
 
-  const segundos = ((Date.now() - inicio) / 1000).toFixed(1);
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(
-    `\nÍndice gravado em ${caminhoIndice}\n` +
-      `  chunks=${embedados.length} dimensoes=${dimensoes} modelo=${embeddings.nomeModelo}\n` +
-      `  corpusVersion=${corpusVersion} tempo=${segundos}s`,
+    `\nIndex written to ${indexPath}\n` +
+      `  chunks=${embedded.length} dimensions=${dimensions} model=${embeddings.modelName}\n` +
+      `  corpusVersion=${corpusVersion} took=${seconds}s`,
   );
 }
 
 main().catch((err) => {
-  console.error('\nFalha na ingestão:\n');
+  console.error('\nIngestion failed:\n');
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

@@ -2,18 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # Nenhum `secrets:` neste job, de propósito.
+    # No `secrets:` in this job, deliberately.
     #
-    # A suíte roda inteira com LLM_PROVIDER=fake, então o CI não precisa de
-    # GEMINI_API_KEY nem de Redis. Se algum teste passar a exigir rede, este
-    # job quebra — que é exatamente o sinal que queremos.
+    # The whole suite runs with LLM_PROVIDER=fake, so CI needs neither a
+    # GEMINI_API_KEY nor Redis. If a test ever starts requiring the network this
+    # job breaks — which is exactly the signal we want.
     env:
       LLM_PROVIDER: fake
       NODE_ENV: test
@@ -26,7 +26,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Instalar dependências
+      - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
       - name: Typecheck (backend + console)
@@ -35,14 +35,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Testes
+      - name: Tests
         run: npm test
 
-      - name: Build (backend + bundle do console)
+      - name: Build (backend + console bundle)
         run: npm run build
 
-      - name: Verificar que public/app.js commitado está atualizado
-        # O bundle é commitado para o avaliador não precisar buildar. Se ele
-        # divergir do web/app.ts, o console entregue estaria desatualizado —
-        # então isso é falha de CI, não um detalhe.
+      - name: Verify the committed console bundle is up to date
+        # The bundle is committed so the reviewer needs no build step. If it
+        # drifts from web/app.ts the delivered console would be stale — so this
+        # is a CI failure, not a detail.
         run: git diff --exit-code -- public/app.js

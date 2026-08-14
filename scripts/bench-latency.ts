@@ -4,42 +4,42 @@ import { join, resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
-import { configurarApp } from '../src/bootstrap';
-import { ENV } from '../src/config/config.module';
-import type { Env } from '../src/config/env';
-import { CACHE } from '../src/cache/cache.module';
-import type { CachePort } from '../src/cache/cache.port';
-import type { AskResponse } from '../src/http/contracts';
+import { configureApp } from '../src/bootstrap';
+import { ENV } from '../src/infrastructure/config/config.module';
+import type { Env } from '../src/infrastructure/config/env';
+import { CACHE, type CachePort } from '../src/application/ports/cache.port';
 
-interface PerguntaDemo {
+import type { AskResponse } from '../src/presentation/http/api-contract';
+
+interface DemoQuestion {
   id: string;
-  categoria: string;
+  category: string;
   texto: string;
 }
 
-interface Amostra {
+interface Sample {
   id: string;
-  categoria: string;
-  rodada: number;
-  rota: string;
+  category: string;
+  round: number;
+  route: string;
   cache: string;
-  recusado: boolean;
-  degradado: boolean;
+  refused: boolean;
+  degraded: boolean;
   totalMs: number;
   ttftMs: number | null;
   retrievalMs: number | null;
   llmMs: number | null;
-  classificarMs: number | null;
-  responderMs: number | null;
-  tokensEntrada: number;
-  tokensSaida: number;
-  custoUsd: number;
+  classifyMs: number | null;
+  answerMs: number | null;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
 }
 
-const RODADAS = Number(process.env.RODADAS ?? 3);
-const MODO = (process.env.MODO ?? 'frio') as 'frio' | 'quente';
+const ROUNDS = Number(process.env.ROUNDS ?? 3);
+const MODE = (process.env.MODE ?? 'cold') as 'cold' | 'warm';
 
-async function portaLivre(): Promise<number> {
+async function freePort(): Promise<number> {
   return new Promise((res, rej) => {
     const s = createServer();
     s.once('error', rej);
@@ -51,33 +51,33 @@ async function portaLivre(): Promise<number> {
   });
 }
 
-function percentil(valores: number[], p: number): number {
+function percentile(valores: number[], p: number): number {
   if (valores.length === 0) return 0;
   const ordenado = [...valores].sort((a, b) => a - b);
   const indice = Math.ceil((p / 100) * ordenado.length) - 1;
   return ordenado[Math.min(Math.max(indice, 0), ordenado.length - 1)];
 }
 
-function resumir(rotulo: string, amostras: Amostra[]): string {
-  if (amostras.length === 0) return `${rotulo.padEnd(16)} (sem amostras)`;
+function summarise(label: string, samples: Sample[]): string {
+  if (samples.length === 0) return `${label.padEnd(16)} (sem samples)`;
 
-  const totais = amostras.map((a) => a.totalMs);
-  const custo = amostras.reduce((s, a) => s + a.custoUsd, 0);
+  const totals = samples.map((a) => a.totalMs);
+  const cost = samples.reduce((s, a) => s + a.costUsd, 0);
 
   return (
-    rotulo.padEnd(16) +
-    String(amostras.length).padStart(4) +
-    String(percentil(totais, 50)).padStart(9) +
-    String(percentil(totais, 95)).padStart(9) +
-    String(percentil(totais, 99)).padStart(9) +
-    String(Math.min(...totais)).padStart(9) +
-    String(Math.max(...totais)).padStart(9) +
-    ('US$' + (custo / amostras.length).toFixed(6)).padStart(14)
+    label.padEnd(16) +
+    String(samples.length).padStart(4) +
+    String(percentile(totals, 50)).padStart(9) +
+    String(percentile(totals, 95)).padStart(9) +
+    String(percentile(totals, 99)).padStart(9) +
+    String(Math.min(...totals)).padStart(9) +
+    String(Math.max(...totals)).padStart(9) +
+    ('US$' + (cost / samples.length).toFixed(6)).padStart(14)
   );
 }
 
 async function main(): Promise<void> {
-  const porta = await portaLivre();
+  const porta = await freePort();
   process.env.PORT = String(porta);
   process.env.MOCK_API_BASE_URL = `http://127.0.0.1:${porta}/mock/v1`;
   process.env.LOG_LEVEL ??= 'error';
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     new FastifyAdapter({ logger: false }),
     { logger: ['error'] },
   );
-  await configurarApp(app);
+  await configureApp(app);
   await app.init();
   await app.listen({ port: porta, host: '127.0.0.1' });
 
@@ -95,54 +95,54 @@ async function main(): Promise<void> {
   const cache = app.get<CachePort>(CACHE);
   const base = `http://127.0.0.1:${porta}`;
 
-  const arquivo = JSON.parse(
+  const file = JSON.parse(
     await readFile(resolve(process.cwd(), 'eval', 'questions.json'), 'utf-8'),
-  ) as { perguntas: PerguntaDemo[] };
+  ) as { questions: DemoQuestion[] };
 
-  const perguntas = arquivo.perguntas;
+  const questions = file.questions;
 
   console.log(
     `\nBenchmark de latência\n` +
       `  modelo=${env.GEMINI_CHAT_MODEL}  embeddings=${env.GEMINI_EMBED_MODEL}\n` +
-      `  provider=${env.LLM_PROVIDER}  modo=${MODO}  rodadas=${RODADAS}\n` +
-      `  perguntas=${perguntas.length}  total de amostras=${perguntas.length * RODADAS}\n`,
+      `  provider=${env.LLM_PROVIDER}  modo=${MODE}  rodadas=${ROUNDS}\n` +
+      `  questions=${questions.length}  total de samples=${questions.length * ROUNDS}\n`,
   );
 
-  if (MODO === 'frio') await cache.limpar();
+  if (MODE === 'cold') await cache.clear();
 
-  const amostras: Amostra[] = [];
+  const samples: Sample[] = [];
 
-  for (let rodada = 1; rodada <= RODADAS; rodada++) {
-    process.stdout.write(`  rodada ${rodada}/${RODADAS}: `);
+  for (let round = 1; round <= ROUNDS; round++) {
+    process.stdout.write(`  round ${round}/${ROUNDS}: `);
 
-    for (const pergunta of perguntas) {
-      const resposta = await fetch(`${base}/ask`, {
+    for (const question of questions) {
+      const response = await fetch(`${base}/ask`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
 
-        body: JSON.stringify({ pergunta: pergunta.texto, ignorarCache: MODO === 'frio' }),
+        body: JSON.stringify({ question: question.texto, bypassCache: MODE === 'cold' }),
       });
 
-      const dados = (await resposta.json()) as AskResponse;
-      const porNo = dados.tempos.porNo ?? {};
+      const data = (await response.json()) as AskResponse;
+      const perNode = data.timings.perNode ?? {};
 
-      amostras.push({
-        id: pergunta.id,
-        categoria: pergunta.categoria,
-        rodada,
-        rota: dados.rota,
-        cache: dados.cache,
-        recusado: dados.recusado,
-        degradado: dados.degradado,
-        totalMs: dados.tempos.totalMs,
-        ttftMs: dados.tempos.ttftMs,
-        retrievalMs: dados.tempos.retrievalMs,
-        llmMs: dados.tempos.llmMs,
-        classificarMs: porNo.classificar ?? null,
-        responderMs: porNo.responder ?? null,
-        tokensEntrada: dados.custo.tokensEntrada,
-        tokensSaida: dados.custo.tokensSaida,
-        custoUsd: dados.custo.custoUsd,
+      samples.push({
+        id: question.id,
+        category: question.category,
+        round,
+        route: data.route,
+        cache: data.cache,
+        refused: data.refused,
+        degraded: data.degraded,
+        totalMs: data.timings.totalMs,
+        ttftMs: data.timings.ttftMs,
+        retrievalMs: data.timings.retrievalMs,
+        llmMs: data.timings.llmMs,
+        classifyMs: perNode.classificar ?? null,
+        answerMs: perNode.responder ?? null,
+        inputTokens: data.cost.inputTokens,
+        outputTokens: data.cost.outputTokens,
+        costUsd: data.cost.usd,
       });
 
       process.stdout.write('.');
@@ -151,36 +151,36 @@ async function main(): Promise<void> {
     process.stdout.write(' ok\n');
   }
 
-  const colunas: (keyof Amostra)[] = [
+  const columns: (keyof Sample)[] = [
     'id',
-    'categoria',
-    'rodada',
-    'rota',
+    'category',
+    'round',
+    'route',
     'cache',
-    'recusado',
-    'degradado',
+    'refused',
+    'degraded',
     'totalMs',
     'ttftMs',
     'retrievalMs',
     'llmMs',
-    'classificarMs',
-    'responderMs',
-    'tokensEntrada',
-    'tokensSaida',
-    'custoUsd',
+    'classifyMs',
+    'answerMs',
+    'inputTokens',
+    'outputTokens',
+    'costUsd',
   ];
 
   const csv = [
-    colunas.join(','),
-    ...amostras.map((a) => colunas.map((c) => a[c] ?? '').join(',')),
+    columns.join(','),
+    ...samples.map((a) => columns.map((c) => a[c] ?? '').join(',')),
   ].join('\n');
 
-  const destino = join(process.cwd(), 'eval', 'results');
-  await mkdir(destino, { recursive: true });
-  const nomeCsv = MODO === 'frio' ? 'latency.csv' : 'latency-cache-quente.csv';
-  await writeFile(join(destino, nomeCsv), csv, 'utf-8');
+  const outDir = join(process.cwd(), 'eval', 'results');
+  await mkdir(outDir, { recursive: true });
+  const csvName = MODE === 'cold' ? 'latency.csv' : 'latency-cache-warm.csv';
+  await writeFile(join(outDir, csvName), csv, 'utf-8');
 
-  const cabecalho =
+  const header =
     'grupo'.padEnd(16) +
     'n'.padStart(4) +
     'p50'.padStart(9) +
@@ -188,53 +188,53 @@ async function main(): Promise<void> {
     'p99'.padStart(9) +
     'min'.padStart(9) +
     'max'.padStart(9) +
-    'custo médio'.padStart(14);
+    'cost médio'.padStart(14);
 
-  const linhas: string[] = ['', cabecalho, '-'.repeat(cabecalho.length)];
-  linhas.push(resumir('TODAS', amostras));
-  linhas.push('');
+  const lines: string[] = ['', header, '-'.repeat(header.length)];
+  lines.push(summarise('TODAS', samples));
+  lines.push('');
 
-  for (const rota of ['kb', 'tool', 'hybrid', 'out_of_scope']) {
-    linhas.push(resumir(`rota ${rota}`, amostras.filter((a) => a.rota === rota)));
+  for (const route of ['kb', 'tool', 'hybrid', 'out_of_scope']) {
+    lines.push(summarise(`route ${route}`, samples.filter((a) => a.route === route)));
   }
 
-  linhas.push('');
-  for (const categoria of [...new Set(amostras.map((a) => a.categoria))]) {
-    linhas.push(resumir(categoria, amostras.filter((a) => a.categoria === categoria)));
+  lines.push('');
+  for (const category of [...new Set(samples.map((a) => a.category))]) {
+    lines.push(summarise(category, samples.filter((a) => a.category === category)));
   }
 
-  const custoTotal = amostras.reduce((s, a) => s + a.custoUsd, 0);
-  const tokensTotal = amostras.reduce((s, a) => s + a.tokensEntrada + a.tokensSaida, 0);
+  const totalCost = samples.reduce((s, a) => s + a.costUsd, 0);
+  const totalTokens = samples.reduce((s, a) => s + a.inputTokens + a.outputTokens, 0);
 
-  const comFalha = amostras.filter((a) => a.degradado);
-  const semFalha = amostras.filter((a) => !a.degradado);
-  const totaisLimpos = semFalha.map((a) => a.totalMs);
+  const failed = samples.filter((a) => a.degraded);
+  const healthy = samples.filter((a) => !a.degraded);
+  const healthyTotals = healthy.map((a) => a.totalMs);
 
-  linhas.push(
+  lines.push(
     '',
-    `falhas de infraestrutura (degradado=true): ${comFalha.length}/${amostras.length} ` +
-      `(${((comFalha.length / amostras.length) * 100).toFixed(1)}%)`,
+    `falhas de infraestrutura (degraded=true): ${failed.length}/${samples.length} ` +
+      `(${((failed.length / samples.length) * 100).toFixed(1)}%)`,
     `percentis EXCLUINDO requests degradados — o desempenho do agente quando o ` +
       `provedor responde:`,
-    `  n=${semFalha.length}  p50=${percentil(totaisLimpos, 50)}ms  ` +
-      `p95=${percentil(totaisLimpos, 95)}ms  p99=${percentil(totaisLimpos, 99)}ms  ` +
-      `max=${Math.max(...totaisLimpos, 0)}ms`,
+    `  n=${healthy.length}  p50=${percentile(healthyTotals, 50)}ms  ` +
+      `p95=${percentile(healthyTotals, 95)}ms  p99=${percentile(healthyTotals, 99)}ms  ` +
+      `max=${Math.max(...healthyTotals, 0)}ms`,
   );
 
-  linhas.push(
+  lines.push(
     '',
-    `tempos em ms · percentil por "nearest rank" (valor observado, não interpolado)`,
-    `custo total do benchmark: US$${custoTotal.toFixed(6)}  ·  tokens: ${tokensTotal}`,
-    `CSV: eval/results/${nomeCsv}`,
+    `timings em ms · percentile por "nearest rank" (valor observado, não interpolado)`,
+    `cost total do benchmark: US$${totalCost.toFixed(6)}  ·  tokens: ${totalTokens}`,
+    `CSV: eval/results/${csvName}`,
   );
 
-  const relatorio = linhas.join('\n');
-  console.log(relatorio);
+  const report = lines.join('\n');
+  console.log(report);
 
   await writeFile(
-    join(destino, MODO === 'frio' ? 'latency-resumo.txt' : 'latency-resumo-quente.txt'),
-    `Benchmark de latência — modelo=${env.GEMINI_CHAT_MODEL} modo=${MODO} rodadas=${RODADAS}\n` +
-      `gerado em ${new Date().toISOString()}\n${relatorio}\n`,
+    join(outDir, MODE === 'cold' ? 'latency-resumo.txt' : 'latency-resumo-warm.txt'),
+    `Benchmark de latência — modelo=${env.GEMINI_CHAT_MODEL} modo=${MODE} rodadas=${ROUNDS}\n` +
+      `gerado em ${new Date().toISOString()}\n${report}\n`,
     'utf-8',
   );
 

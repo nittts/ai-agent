@@ -3,94 +3,99 @@
   // web/app.ts
   var $ = (id) => {
     const node = document.getElementById(id);
-    if (!node) throw new Error(`Elemento #${id} n\xE3o existe no index.html`);
+    if (!node) throw new Error(`Element #${id} is missing from index.html`);
     return node;
   };
-  var criar = (tag, classe, texto) => {
-    const el = document.createElement(tag);
-    if (classe) el.className = classe;
-    if (texto !== void 0) el.textContent = texto;
-    return el;
+  var el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== void 0) node.textContent = text;
+    return node;
   };
-  var linhaLeitura = (rotulo, valor, classe = "") => {
-    const linha = criar("div", "leitura");
-    linha.append(
-      criar("dt", "", rotulo),
-      criar("span", "pontilhado"),
-      criar("dd", classe, valor)
-    );
-    return linha;
+  var readout = (label, value, className = "") => {
+    const row = el("div", "readout");
+    row.append(el("dt", "", label), el("span", "leader"), el("dd", className, value));
+    return row;
   };
-  var ms = (v) => v === null ? "\u2014" : `${v} ms`;
-  var transcricao = $("transcricao");
-  var vazio = $("vazio");
-  var entrada = $("entrada");
-  var enviar = $("enviar");
+  var ms = (value) => value === null ? "\u2014" : `${value} ms`;
+  var transcript = $("transcript");
+  var empty = $("empty");
+  var input = $("input");
+  var send = $("send");
   var form = $("form");
   var presets = $("presets");
   var chaos = $("chaos");
-  var rotuloChaos = $("rotulo-chaos");
-  var medicao = $("medicao");
-  var cascata = $("cascata");
-  var fontesEl = $("fontes");
-  var avisosEl = $("avisos");
-  var secaoCascata = $("secao-cascata");
-  var secaoFontes = $("secao-fontes");
-  var secaoAvisos = $("secao-avisos");
-  var ocupado = false;
-  function renderMedicao(r) {
-    medicao.replaceChildren();
-    const classeCache = r.cache === "HIT" ? "v-ok" : r.cache === "OFF" ? "v-neutro" : "";
-    const estado = r.recusado ? "recusado" : r.degradado ? "degradado" : "respondido";
-    const classeEstado = r.degradado ? "v-alerta" : r.recusado ? "v-neutro" : "v-ok";
-    medicao.append(
-      linhaLeitura("rota", r.rota),
-      linhaLeitura("estado", estado, classeEstado),
-      linhaLeitura("cache", r.cache, classeCache),
-      linhaLeitura("1\xBA token", ms(r.tempos.ttftMs)),
-      linhaLeitura("total", ms(r.tempos.totalMs)),
-      linhaLeitura("tokens", `${r.custo.tokensEntrada} / ${r.custo.tokensSaida}`),
-      linhaLeitura(
+  var chaosLabel = $("chaos-label");
+  var measurements = $("measurements");
+  var waterfall = $("waterfall");
+  var waterfallNote = $("waterfall-note");
+  var sourcesEl = $("sources");
+  var warningsEl = $("warnings");
+  var waterfallSection = $("waterfall-section");
+  var sourcesSection = $("sources-section");
+  var warningsSection = $("warnings-section");
+  var busy = false;
+  var ROUTE_LABELS = {
+    kb: "pol\xEDticas",
+    tool: "dados do RH",
+    hybrid: "pol\xEDticas + RH",
+    outOfScope: "fora de escopo"
+  };
+  function renderMeasurements(result) {
+    measurements.replaceChildren();
+    const cacheClass = result.cache === "HIT" ? "pill v-ok" : result.cache === "OFF" ? "v-neutral" : "pill";
+    const state = result.refused ? "recusado" : result.degraded ? "degradado" : "respondido";
+    const stateClass = result.degraded ? "pill v-warn" : result.refused ? "v-neutral" : "pill v-ok";
+    measurements.append(
+      readout("rota", ROUTE_LABELS[result.route] ?? result.route, "pill v-accent"),
+      readout("estado", state, stateClass),
+      readout("cache", result.cache, cacheClass),
+      readout("1\xBA token", ms(result.timings.ttftMs)),
+      readout("total", ms(result.timings.totalMs)),
+      readout("tokens", `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
+      readout(
         "custo",
 
-        r.custo.custoUsd === 0 ? "US$ 0" : `US$ ${r.custo.custoUsd.toFixed(6)}`,
-        r.custo.custoUsd === 0 ? "v-ok" : ""
+        result.cost.usd === 0 ? "US$ 0" : `US$ ${result.cost.usd.toFixed(6)}`,
+        result.cost.usd === 0 ? "v-ok" : ""
       )
     );
   }
-  function renderCascata(porNo) {
-    cascata.replaceChildren();
-    if (!porNo || Object.keys(porNo).length === 0) {
-      secaoCascata.hidden = true;
+  function renderWaterfall(perNode) {
+    waterfall.replaceChildren();
+    waterfallNote.textContent = "";
+    if (!perNode || Object.keys(perNode).length === 0) {
+      waterfallSection.hidden = true;
       return;
     }
-    const ordem = ["classificar", "recuperar", "consultarApi", "avaliar", "responder"];
-    const houveFanOut = "recuperar" in porNo && "consultarApi" in porNo;
-    const paralelos = new Set(houveFanOut ? ["recuperar", "consultarApi"] : []);
-    const entradas = ordem.filter((nome) => nome in porNo).map((nome) => ({ nome, dur: porNo[nome] }));
-    if (entradas.length === 0) {
-      secaoCascata.hidden = true;
+    const order = ["classify", "retrieve", "callHrApi", "grade", "generateAnswer", "refuse"];
+    const hadFanOut = "retrieve" in perNode && "callHrApi" in perNode;
+    const parallel = new Set(hadFanOut ? ["retrieve", "callHrApi"] : []);
+    const entries = order.filter((name) => name in perNode).map((name) => ({ name, ms: perNode[name] }));
+    if (entries.length === 0) {
+      waterfallSection.hidden = true;
       return;
     }
-    const maior = Math.max(...entradas.map((e) => e.dur), 1);
-    for (const { nome, dur } of entradas) {
-      const faixa = criar("div", "faixa");
-      const trilha = criar("div", "trilha");
-      const barra = criar("div", "barra");
-      barra.style.width = `${Math.max(2, dur / maior * 100)}%`;
-      if (paralelos.has(nome)) barra.dataset.paralelo = "true";
-      trilha.append(barra);
-      faixa.append(criar("span", "nome", nome), trilha, criar("span", "ms", String(dur)));
-      cascata.append(faixa);
+    const longest = Math.max(...entries.map((e) => e.ms), 1);
+    for (const { name, ms: duration } of entries) {
+      const lane = el("div", "lane");
+      const track = el("div", "track");
+      const bar = el("div", "bar");
+      bar.style.width = `${Math.max(2, duration / longest * 100)}%`;
+      if (parallel.has(name)) bar.dataset.parallel = "true";
+      track.append(bar);
+      lane.append(el("span", "name", name), track, el("span", "ms", String(duration)));
+      waterfall.append(lane);
     }
-    secaoCascata.hidden = false;
+    waterfallNote.textContent = hadFanOut ? "As barras hachuradas rodaram em paralelo, no mesmo superstep do grafo \u2014 som\xE1-las superestimaria o total." : "";
+    waterfallSection.hidden = false;
   }
-  function renderFontes(fontes) {
-    fontesEl.replaceChildren();
-    if (fontes.length === 0) {
-      secaoFontes.hidden = false;
-      fontesEl.append(
-        criar(
+  function renderSources(sources) {
+    sourcesEl.replaceChildren();
+    if (sources.length === 0) {
+      sourcesSection.hidden = false;
+      sourcesEl.append(
+        el(
           "p",
           "placeholder",
           "Nenhuma fonte citada \u2014 a resposta foi uma recusa, e recusar sem fundamenta\xE7\xE3o \xE9 o comportamento correto."
@@ -98,148 +103,156 @@
       );
       return;
     }
-    fontes.forEach((fonte, i) => {
-      const bloco = criar("div", "fonte");
-      const corpo = criar("div");
-      if (fonte.tipo === "documento") {
-        corpo.append(criar("div", "onde", `${fonte.arquivo} \xA7 ${fonte.secao}`));
-        corpo.append(criar("div", "detalhe", `similaridade ${fonte.score.toFixed(3)}`));
-        corpo.append(criar("div", "trecho", fonte.trecho));
+    sources.forEach((source, i) => {
+      const block = el("div", "source");
+      const body = el("div");
+      if (source.kind === "document") {
+        body.append(el("div", "where", `${source.file} \xA7 ${source.section}`));
+        body.append(el("div", "detail", `similaridade ${source.score.toFixed(3)}`));
+        body.append(el("div", "excerpt", source.excerpt));
       } else {
-        corpo.append(criar("div", "onde", fonte.endpoint));
-        corpo.append(
-          criar("div", "detalhe", `campos: ${fonte.campos.join(", ")} \xB7 ${fonte.latenciaMs} ms`)
+        body.append(el("div", "where", source.endpoint));
+        body.append(
+          el("div", "detail", `campos: ${source.fields.join(", ")} \xB7 ${source.latencyMs} ms`)
         );
       }
-      bloco.append(criar("div", "n", String(i + 1)), corpo);
-      fontesEl.append(bloco);
+      block.append(el("div", "n", String(i + 1)), body);
+      sourcesEl.append(block);
     });
-    secaoFontes.hidden = false;
+    sourcesSection.hidden = false;
   }
-  function renderAvisos(avisos) {
-    avisosEl.replaceChildren();
-    secaoAvisos.hidden = avisos.length === 0;
-    for (const aviso of avisos) avisosEl.append(criar("div", "", `\u2022 ${aviso}`));
+  function renderWarnings(warnings) {
+    warningsEl.replaceChildren();
+    warningsSection.hidden = warnings.length === 0;
+    for (const warning of warnings) warningsEl.append(el("div", "", `\u2022 ${warning}`));
   }
-  function pintarCitacoes(alvo, texto) {
-    alvo.replaceChildren();
-    const partes = texto.split(/(\[\d+\])/g);
-    for (const parte of partes) {
-      if (/^\[\d+\]$/.test(parte)) alvo.append(criar("sup", "cit", parte));
-      else alvo.append(document.createTextNode(parte));
+  function paintCitations(target, text) {
+    target.replaceChildren();
+    for (const part of text.split(/(\[\d+\])/g)) {
+      if (/^\[\d+\]$/.test(part)) target.append(el("sup", "cite", part));
+      else target.append(document.createTextNode(part));
     }
   }
-  function adicionarPergunta(texto) {
-    vazio.remove();
-    transcricao.append(criar("div", "turno-pergunta", texto));
+  function addQuestion(text) {
+    empty.remove();
+    const turn = el("div", "turn-question");
+    turn.append(el("span", "", text));
+    transcript.append(turn);
   }
-  function adicionarResposta() {
-    const el = criar("div", "turno-resposta cursor");
-    transcricao.append(el);
-    return el;
+  function addAnswer() {
+    const node = el("div", "turn-answer caret");
+    transcript.append(node);
+    return node;
   }
-  var rolar = () => transcricao.scrollTo({ top: transcricao.scrollHeight, behavior: "smooth" });
-  function perguntar(texto) {
-    if (ocupado || !texto.trim()) return;
-    ocupado = true;
-    enviar.disabled = true;
-    entrada.value = "";
-    adicionarPergunta(texto);
-    const alvo = adicionarResposta();
-    rolar();
-    let acumulado = "";
-    const fonte = new EventSource(`/ask/stream?q=${encodeURIComponent(texto)}`);
-    const encerrar = () => {
-      fonte.close();
-      alvo.classList.remove("cursor");
-      ocupado = false;
-      enviar.disabled = false;
-      entrada.focus();
+  var scroll = () => transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
+  function ask(text) {
+    if (busy || !text.trim()) return;
+    busy = true;
+    send.disabled = true;
+    input.value = "";
+    addQuestion(text);
+    const target = addAnswer();
+    scroll();
+    let accumulated = "";
+    const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
+    const finish = () => {
+      stream.close();
+      target.classList.remove("caret");
+      busy = false;
+      send.disabled = false;
+      input.focus();
     };
-    fonte.onmessage = (evento) => {
-      const dados = JSON.parse(evento.data);
-      switch (dados.tipo) {
+    stream.onmessage = (message) => {
+      const event = JSON.parse(message.data);
+      switch (event.type) {
         case "token":
-          acumulado += dados.texto;
-          pintarCitacoes(alvo, acumulado);
-          rolar();
+          accumulated += event.text;
+          paintCitations(target, accumulated);
+          scroll();
           break;
-        case "fontes":
-          renderFontes(dados.fontes);
+        case "sources":
+          renderSources(event.sources);
           break;
-        case "fim": {
-          const r = dados.resumo;
-          if (r.recusado) alvo.dataset.recusado = "true";
-          if (!acumulado && r.resposta) pintarCitacoes(alvo, r.resposta);
-          if (r.degradado) {
-            alvo.append(criar("div", "selo", "respondido com uma fonte indispon\xEDvel"));
+        case "done": {
+          const result = event.summary;
+          if (result.refused) target.dataset.refused = "true";
+          if (!accumulated && result.answer) paintCitations(target, result.answer);
+          if (result.degraded) {
+            target.append(el("div", "badge", "respondido com uma fonte indispon\xEDvel"));
           }
-          renderMedicao(r);
-          renderCascata(r.tempos.porNo);
-          renderAvisos(r.avisos);
-          rolar();
-          encerrar();
+          renderMeasurements(result);
+          renderWaterfall(result.timings.perNode);
+          renderWarnings(result.warnings);
+          scroll();
+          finish();
           break;
         }
-        case "erro":
-          alvo.textContent = `Falha ao responder: ${dados.mensagem} (correlationId ${dados.correlationId})`;
-          encerrar();
+        case "error":
+          target.textContent = `Falha ao responder: ${event.message} (correlationId ${event.correlationId})`;
+          finish();
           break;
       }
     };
-    fonte.onerror = () => {
-      if (!acumulado) alvo.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
-      encerrar();
+    stream.onerror = () => {
+      if (!accumulated) target.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
+      finish();
     };
   }
-  async function carregarPresets() {
+  var CATEGORY_LABELS = {
+    kbSimple: "pol\xEDtica \u2014 direta",
+    kbMulti: "pol\xEDtica \u2014 m\xFAltiplos documentos",
+    tool: "dados do colaborador",
+    hybrid: "pol\xEDtica + dados",
+    outOfScope: "fora de escopo",
+    adversarial: "adversarial"
+  };
+  async function loadPresets() {
     try {
-      const resposta = await fetch("/demo/perguntas");
-      if (!resposta.ok) return;
-      const { perguntas, chaosDisponivel } = await resposta.json();
-      const categorias = [...new Set(perguntas.map((p) => p.categoria))];
-      for (const categoria of categorias) {
-        const grupo = document.createElement("optgroup");
-        grupo.label = categoria.replace(/_/g, " ");
-        for (const pergunta of perguntas.filter((p) => p.categoria === categoria)) {
-          const opcao = document.createElement("option");
-          opcao.value = pergunta.texto;
-          opcao.textContent = pergunta.texto;
-          opcao.title = `Esperado: ${pergunta.esperado}`;
-          grupo.append(opcao);
+      const response = await fetch("/demo/questions");
+      if (!response.ok) return;
+      const { questions, chaosAvailable } = await response.json();
+      for (const category of [...new Set(questions.map((q) => q.category))]) {
+        const group = document.createElement("optgroup");
+        group.label = CATEGORY_LABELS[category] ?? category;
+        for (const question of questions.filter((q) => q.category === category)) {
+          const option = document.createElement("option");
+          option.value = question.text;
+          option.textContent = question.text;
+          option.title = `Esperado: ${question.expected}`;
+          group.append(option);
         }
-        presets.append(grupo);
+        presets.append(group);
       }
-      rotuloChaos.hidden = !chaosDisponivel;
+      chaosLabel.hidden = !chaosAvailable;
     } catch {
       void 0;
     }
   }
-  async function alternarChaos(ativo) {
-    rotuloChaos.dataset.ativo = String(ativo);
+  async function toggleChaos(on) {
+    chaosLabel.dataset.on = String(on);
     try {
       await fetch("/mock/v1/_chaos", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ modo: ativo ? "500" : "ok" })
+        body: JSON.stringify({ mode: on ? "500" : "ok" })
       });
     } catch {
-      chaos.checked = !ativo;
-      rotuloChaos.dataset.ativo = String(!ativo);
+      chaos.checked = !on;
+      chaosLabel.dataset.on = String(!on);
     }
   }
-  form.addEventListener("submit", (evento) => {
-    evento.preventDefault();
-    perguntar(entrada.value);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    ask(input.value);
   });
   presets.addEventListener("change", () => {
-    const escolhida = presets.value;
-    if (!escolhida) return;
-    entrada.value = escolhida;
+    const chosen = presets.value;
+    if (!chosen) return;
+    input.value = chosen;
     presets.selectedIndex = 0;
-    perguntar(escolhida);
+    ask(chosen);
   });
-  chaos.addEventListener("change", () => void alternarChaos(chaos.checked));
-  void carregarPresets();
-  entrada.focus();
+  chaos.addEventListener("change", () => void toggleChaos(chaos.checked));
+  void loadPresets();
+  input.focus();
 })();

@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AgentModule } from './agent/agent.module';
-import { CacheModule } from './cache/cache.module';
-import { ConfigModule } from './config/config.module';
-import { HttpModule } from './http/http.module';
-import { LlmModule } from './llm/llm.module';
-import { MockApiModule } from './mock-api/mock-api.module';
-import { RetrievalModule } from './retrieval/retrieval.module';
+import { ConfigModule } from './infrastructure/config/config.module';
+import { CacheModule } from './infrastructure/modules/cache.module';
+import { LlmModule } from './infrastructure/modules/llm.module';
+import { RetrievalModule } from './infrastructure/modules/retrieval.module';
+import { AgentModule } from './infrastructure/modules/agent.module';
+import { HttpModule } from './infrastructure/modules/http.module';
+import { MockHrApiModule } from './infrastructure/modules/mock-hr-api.module';
 
 @Module({
   imports: [
@@ -13,9 +13,9 @@ import { RetrievalModule } from './retrieval/retrieval.module';
     CacheModule,
     LlmModule,
     RetrievalModule,
-    MockApiModule,
     AgentModule,
     HttpModule,
+    MockHrApiModule,
   ],
 })
 export class AppModule {}

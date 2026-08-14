@@ -1,149 +1,155 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { loadEnv } from '../src/config/env';
-import { criarEmbeddings } from '../src/llm/embeddings';
-import { MemoryVectorStore } from '../src/retrieval/memory-vector-store';
-import type { IndexSnapshot } from '../src/retrieval/types';
+import { loadEnv } from '../src/infrastructure/config/env';
+import { createEmbeddings } from '../src/infrastructure/llm/embeddings.factory';
+import { InMemoryVectorStore } from '../src/infrastructure/retrieval/in-memory-vector-store';
+import type { IndexSnapshot } from '../src/domain/knowledge';
 
-interface Pergunta {
+interface Question {
   id: string;
-  categoria: string;
-  texto: string;
-  docEsperado: string | null;
+  category: string;
+  text: string;
+  expectedDoc: string | null;
 }
 
-interface Resultado {
+interface Row {
   id: string;
-  categoria: string;
-  texto: string;
-  docEsperado: string;
-  posicao: number | null;
-  scoreTopo: number;
-  docTopo: string;
+  category: string;
+  text: string;
+  expectedDoc: string;
+  rank: number | null;
+  topScore: number;
+  topDoc: string;
   recall1: boolean;
   recall3: boolean;
   recall5: boolean;
 }
 
-const K_MAX = 5;
+const MAX_K = 5;
 
 async function main(): Promise<void> {
   const env = loadEnv();
 
-  const arquivo = JSON.parse(
+  const file = JSON.parse(
     await readFile(resolve(process.cwd(), 'eval', 'questions.json'), 'utf-8'),
-  ) as { perguntas: Pergunta[] };
+  ) as { questions: Question[] };
 
-  const comGabarito = arquivo.perguntas.filter((p) => p.docEsperado !== null);
+  const labelled = file.questions.filter((q) => q.expectedDoc !== null);
 
   const snapshot = JSON.parse(
     await readFile(resolve(process.cwd(), env.INDEX_PATH), 'utf-8'),
   ) as IndexSnapshot;
 
-  const embeddings = criarEmbeddings(env);
+  const embeddings = createEmbeddings(env);
 
-  if (snapshot.modeloEmbedding !== embeddings.nomeModelo) {
+  if (snapshot.embeddingModel !== embeddings.modelName) {
     throw new Error(
-      `Índice gerado com "${snapshot.modeloEmbedding}" mas o provider atual usa ` +
-        `"${embeddings.nomeModelo}". Rode \`npm run ingest\` antes de avaliar.`,
+      `Index was built with "${snapshot.embeddingModel}" but the current provider uses ` +
+        `"${embeddings.modelName}". Run \`npm run ingest\` before evaluating.`,
     );
   }
 
-  const store = new MemoryVectorStore();
-  store.carregar(snapshot);
+  const store = new InMemoryVectorStore();
+  store.load(snapshot);
 
   console.log(
-    `\nAvaliação de retrieval\n` +
-      `  modelo=${embeddings.nomeModelo}  chunks=${store.tamanho()}  ` +
+    `\nRetrieval evaluation\n` +
+      `  model=${embeddings.modelName}  chunks=${store.size()}  ` +
       `corpusVersion=${store.corpusVersion()}\n` +
-      `  perguntas com gabarito=${comGabarito.length} (de ${arquivo.perguntas.length})\n`,
+      `  labelled questions=${labelled.length} (of ${file.questions.length})\n`,
   );
 
-  const resultados: Resultado[] = [];
+  const rows: Row[] = [];
 
-  for (const pergunta of comGabarito) {
-    const vetor = await embeddings.embedarConsulta(pergunta.texto);
-    const encontrados = store.buscar(vetor, K_MAX);
+  for (const question of labelled) {
+    const vector = await embeddings.embedQuery(question.text);
+    const found = store.search(vector, MAX_K);
 
-    const indice = encontrados.findIndex((r) => r.metadata.arquivo === pergunta.docEsperado);
-    const posicao = indice >= 0 ? indice + 1 : null;
+    const index = found.findIndex((r) => r.metadata.file === question.expectedDoc);
+    const rank = index >= 0 ? index + 1 : null;
 
-    resultados.push({
-      id: pergunta.id,
-      categoria: pergunta.categoria,
-      texto: pergunta.texto,
-      docEsperado: pergunta.docEsperado!,
-      posicao,
-      scoreTopo: Number((encontrados[0]?.score ?? 0).toFixed(4)),
-      docTopo: encontrados[0]?.metadata.arquivo ?? '-',
-      recall1: posicao !== null && posicao <= 1,
-      recall3: posicao !== null && posicao <= 3,
-      recall5: posicao !== null && posicao <= 5,
+    rows.push({
+      id: question.id,
+      category: question.category,
+      text: question.text,
+      expectedDoc: question.expectedDoc!,
+      rank,
+      topScore: Number((found[0]?.score ?? 0).toFixed(4)),
+      topDoc: found[0]?.metadata.file ?? '-',
+      recall1: rank !== null && rank <= 1,
+      recall3: rank !== null && rank <= 3,
+      recall5: rank !== null && rank <= 5,
     });
   }
 
-  const n = resultados.length;
-  const taxa = (f: (r: Resultado) => boolean) => resultados.filter(f).length / n;
+  const n = rows.length;
+  const rate = (predicate: (r: Row) => boolean) => rows.filter(predicate).length / n;
 
-  const recall1 = taxa((r) => r.recall1);
-  const recall3 = taxa((r) => r.recall3);
-  const recall5 = taxa((r) => r.recall5);
-  const mrr = resultados.reduce((s, r) => s + (r.posicao ? 1 / r.posicao : 0), 0) / n;
+  const recall1 = rate((r) => r.recall1);
+  const recall3 = rate((r) => r.recall3);
+  const recall5 = rate((r) => r.recall5);
+  const mrr = rows.reduce((sum, r) => sum + (r.rank ? 1 / r.rank : 0), 0) / n;
 
-  const falhas = resultados.filter((r) => !r.recall3);
+  const misses = rows.filter((r) => !r.recall3);
 
-  const linhas: string[] = [
-    'métrica'.padEnd(12) + 'valor'.padStart(8),
+  const lines: string[] = [
+    'metric'.padEnd(12) + 'value'.padStart(8),
     '-'.repeat(20),
     'recall@1'.padEnd(12) + recall1.toFixed(3).padStart(8),
     'recall@3'.padEnd(12) + recall3.toFixed(3).padStart(8),
     'recall@5'.padEnd(12) + recall5.toFixed(3).padStart(8),
     'MRR'.padEnd(12) + mrr.toFixed(3).padStart(8),
     '',
-    'por categoria:',
+    'by category:',
   ];
 
-  for (const categoria of [...new Set(resultados.map((r) => r.categoria))]) {
-    const doGrupo = resultados.filter((r) => r.categoria === categoria);
-    const r3 = doGrupo.filter((r) => r.recall3).length / doGrupo.length;
-    linhas.push(
-      `  ${categoria.padEnd(14)} n=${String(doGrupo.length).padStart(2)}  recall@3=${r3.toFixed(3)}`,
-    );
+  for (const category of [...new Set(rows.map((r) => r.category))]) {
+    const group = rows.filter((r) => r.category === category);
+    const r3 = group.filter((r) => r.recall3).length / group.length;
+    lines.push(`  ${category.padEnd(14)} n=${String(group.length).padStart(2)}  recall@3=${r3.toFixed(3)}`);
   }
 
-  if (falhas.length > 0) {
-    linhas.push('', 'perguntas SEM o documento esperado no top-3:');
-    for (const f of falhas) {
-      linhas.push(
-        `  [${f.id}] "${f.texto.slice(0, 58)}"\n` +
-          `        esperado=${f.docEsperado}  top1=${f.docTopo} (${f.scoreTopo})  posição=${f.posicao ?? 'fora do top-5'}`,
+  if (misses.length > 0) {
+    lines.push('', 'questions WITHOUT the expected document in the top-3:');
+    for (const miss of misses) {
+      lines.push(
+        `  [${miss.id}] "${miss.text.slice(0, 58)}"\n` +
+          `        expected=${miss.expectedDoc}  top1=${miss.topDoc} (${miss.topScore})  rank=${miss.rank ?? 'outside top-5'}`,
       );
     }
   }
 
-  const relatorio = linhas.join('\n');
-  console.log(relatorio);
+  lines.push(
+    '',
+    `n=${n} labelled questions over ${store.size()} chunks. Small, well-separated corpus:`,
+    'treat a perfect score as a sanity floor, not as evidence of robustness at scale.',
+  );
 
-  const destino = join(process.cwd(), 'eval', 'results');
-  await mkdir(destino, { recursive: true });
+  const report = lines.join('\n');
+  console.log(report);
+
+  const outDir = join(process.cwd(), 'eval', 'results');
+  await mkdir(outDir, { recursive: true });
 
   await writeFile(
-    join(destino, 'retrieval-eval.json'),
+    join(outDir, 'retrieval-eval.json'),
     JSON.stringify(
       {
-        geradoEm: new Date().toISOString(),
-        modeloEmbedding: embeddings.nomeModelo,
+        generatedAt: new Date().toISOString(),
+        embeddingModel: embeddings.modelName,
         corpusVersion: store.corpusVersion(),
-        chunks: store.tamanho(),
-        limiarRecusa: env.RETRIEVAL_MIN_SCORE,
-        metricas: {
+        chunks: store.size(),
+        refusalThreshold: env.RETRIEVAL_MIN_SCORE,
+        caveat:
+          'Small labelled set over a well-separated corpus; a perfect score is a sanity floor, not proof of robustness.',
+        metrics: {
           n,
           recall1: Number(recall1.toFixed(4)),
           recall3: Number(recall3.toFixed(4)),
           recall5: Number(recall5.toFixed(4)),
           mrr: Number(mrr.toFixed(4)),
         },
-        resultados,
+        rows,
       },
       null,
       2,
@@ -152,9 +158,9 @@ async function main(): Promise<void> {
   );
 
   await writeFile(
-    join(destino, 'retrieval-eval.txt'),
-    `Avaliação de retrieval — modelo=${embeddings.nomeModelo} corpusVersion=${store.corpusVersion()}\n` +
-      `gerado em ${new Date().toISOString()}\n\n${relatorio}\n`,
+    join(outDir, 'retrieval-eval.txt'),
+    `Retrieval evaluation — model=${embeddings.modelName} corpusVersion=${store.corpusVersion()}\n` +
+      `generated at ${new Date().toISOString()}\n\n${report}\n`,
     'utf-8',
   );
 
@@ -162,6 +168,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('\nFalha na avaliação:\n', err instanceof Error ? err.message : err);
+  console.error('\nEvaluation failed:\n', err instanceof Error ? err.message : err);
   process.exit(1);
 });
