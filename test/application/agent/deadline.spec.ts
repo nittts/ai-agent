@@ -113,4 +113,25 @@ describe('request deadline', () => {
     expect(state.refused).toBe(false);
     expect(state.degraded).toBe(false);
   });
+
+  it('a refusal decided inside generateAnswer still carries its message', async () => {
+    const state = await run(new SlowEmbeddings(fakeEmbeddings, 10_000), 1_200);
+
+    expect(state.refused).toBe(true);
+    expect(state.answer.trim().length).toBeGreaterThan(0);
+  }, 20_000);
+
+  it('refused always implies a non-empty answer, on every route', async () => {
+    const cases = [
+      new SlowEmbeddings(fakeEmbeddings, 10_000),
+      fakeEmbeddings,
+    ];
+
+    for (const embeddings of cases) {
+      for (const deadlineMs of [1_200, 15_000]) {
+        const state = await run(embeddings, deadlineMs);
+        if (state.refused) expect(state.answer.trim().length).toBeGreaterThan(0);
+      }
+    }
+  }, 30_000);
 });

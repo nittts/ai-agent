@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadEnv } from '../../../src/infrastructure/config/env';
 
 describe('loadEnv', () => {
@@ -69,5 +71,42 @@ describe('loadEnv', () => {
     expect(env.RETRIEVAL_TOP_K).toBeGreaterThan(0);
     expect(env.RETRIEVAL_MIN_SCORE).toBeGreaterThan(0);
     expect(env.RETRIEVAL_MIN_SCORE).toBeLessThanOrEqual(1);
+  });
+
+  it('.env.example is a VALID configuration, not just documentation', () => {
+    const raw = Object.fromEntries(
+      readFileSync(join(process.cwd(), '.env.example'), 'utf-8')
+        .split('\n')
+        .filter((line) => /^[A-Z0-9_]+=/.test(line))
+        .map((line) => {
+          const i = line.indexOf('=');
+          return [line.slice(0, i), line.slice(i + 1)];
+        }),
+    ) as NodeJS.ProcessEnv;
+
+    raw.GEMINI_API_KEY = 'placeholder-for-validation';
+
+    expect(() => loadEnv(raw)).not.toThrow();
+  });
+
+  it('.env.example declares exactly the variables the schema knows', () => {
+    const declared = new Set(
+      readFileSync(join(process.cwd(), '.env.example'), 'utf-8')
+        .split('\n')
+        .filter((line) => /^[A-Z0-9_]+=/.test(line))
+        .map((line) => line.slice(0, line.indexOf('='))),
+    );
+
+    const known = new Set(
+      [
+        ...readFileSync(
+          join(process.cwd(), 'src/infrastructure/config/env.ts'),
+          'utf-8',
+        ).matchAll(/^\s{2}([A-Z][A-Z0-9_]+):/gm),
+      ].map((m) => m[1]),
+    );
+
+    expect([...declared].filter((k) => !known.has(k))).toEqual([]);
+    expect([...known].filter((k) => !declared.has(k))).toEqual([]);
   });
 });

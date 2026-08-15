@@ -1,5 +1,5 @@
 import type { AgentStateType } from '../agent-state';
-import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt } from '../prompts';
+import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt, REFUSAL_MESSAGES } from '../prompts';
 import { withRetry, remainingBudget } from '../../../shared/resilience';
 import {
   budgetLeft,
@@ -16,6 +16,8 @@ export function createAnswerNode(ctx: NodeContext) {
         return {
           refused: true,
           refusalReason: 'timedOut',
+
+          answer: REFUSAL_MESSAGES.timedOut,
           degraded: true,
           warnings: ['tempo insuficiente para gerar a resposta dentro do prazo do request'],
         };
@@ -62,6 +64,8 @@ export function createAnswerNode(ctx: NodeContext) {
         return {
           refused: true,
           refusalReason: 'sourcesUnavailable',
+
+          answer: REFUSAL_MESSAGES.sourcesUnavailable,
           degraded: true,
           warnings: ['language model unavailable'],
         };

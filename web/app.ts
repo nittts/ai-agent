@@ -1,4 +1,10 @@
-import type { AskResponse, DemoQuestion, Source, SseEvent } from '../src/presentation/http/api-contract';
+import type {
+  AskResponse,
+  DemoQuestion,
+  HealthResponse,
+  Source,
+  SseEvent,
+} from '../src/presentation/http/api-contract';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -13,72 +19,118 @@ const el = (tag: string, className?: string, text?: string): HTMLElement => {
   return node;
 };
 
-const readout = (label: string, value: string, className = ''): HTMLElement => {
-  const row = el('div', 'readout');
-  row.append(el('dt', '', label), el('span', 'leader'), el('dd', className, value));
-  return row;
+const row = (label: string, value: string, valueClass = ''): HTMLElement => {
+  const line = el('div', 'row');
+  line.append(el('dt', '', label), el('span', 'dots'), el('dd', valueClass, value));
+  return line;
 };
 
 const ms = (value: number | null): string => (value === null ? '—' : `${value} ms`);
 
-const transcript = $('transcript');
-const empty = $('empty');
+const thread = $('thread');
+const threadInner = $('thread-inner');
+const welcome = $('welcome');
+const suggestions = $('suggestions');
 const input = $<HTMLInputElement>('input');
 const send = $<HTMLButtonElement>('send');
 const form = $<HTMLFormElement>('form');
-const presets = $<HTMLSelectElement>('presets');
 const chaos = $<HTMLInputElement>('chaos');
 const chaosLabel = $('chaos-label');
+const facts = $('facts');
 
-const measurements = $('measurements');
-const waterfall = $('waterfall');
-const waterfallNote = $('waterfall-note');
+const measure = $('measure');
+const falls = $('falls');
+const fallsNote = $('falls-note');
 const sourcesEl = $('sources');
 const warningsEl = $('warnings');
-const waterfallSection = $('waterfall-section');
-const sourcesSection = $('sources-section');
-const warningsSection = $('warnings-section');
+const secFalls = $('sec-falls');
+const secSrc = $('sec-src');
+const secWarn = $('sec-warn');
 
 let busy = false;
 
-const ROUTE_LABELS: Record<string, string> = {
+const ROUTE_LABEL: Record<string, string> = {
   kb: 'políticas',
   tool: 'dados do RH',
   hybrid: 'políticas + RH',
   outOfScope: 'fora de escopo',
 };
 
+const REFUSAL_LABEL: Record<string, string> = {
+  outOfScope: 'fora de escopo',
+  notGrounded: 'sem fundamentação',
+  missingIdentification: 'falta matrícula',
+  sourcesUnavailable: 'fontes indisponíveis',
+  timedOut: 'tempo esgotado',
+};
+
+const SUGGESTED: { category: string; label: string; take: number }[] = [
+  { category: 'kbSimple', label: 'Políticas', take: 3 },
+  { category: 'hybrid', label: 'Suas informações + política', take: 2 },
+  { category: 'outOfScope', label: 'Fora de escopo (o agente recusa)', take: 1 },
+];
+
+function renderIdleEvidence(health: HealthResponse | null): void {
+  measure.replaceChildren();
+
+  if (!health) {
+    measure.append(el('p', 'hint', 'Faça uma pergunta para ver a medição desta resposta.'));
+    return;
+  }
+
+  measure.append(
+    row('provider', health.llm.provider, health.llm.provider === 'fake' ? 'tag t-warn' : 'tag t-ok'),
+    row('modelo', health.llm.chatModel ?? 'determinístico'),
+    row('embeddings', health.llm.embeddingModel ?? 'determinístico'),
+    row('cache', health.cache.enabled ? `ligado · ${health.cache.ttlSeconds}s` : 'desligado',
+      health.cache.enabled ? 'tag t-ok' : 't-quiet'),
+  );
+
+  measure.append(
+    el(
+      'p',
+      'hint',
+      'Faça uma pergunta: aqui aparecem a rota escolhida, o tempo de cada etapa do grafo, ' +
+        'as fontes citadas e o custo em tokens.',
+    ),
+  );
+}
+
 function renderMeasurements(result: AskResponse): void {
-  measurements.replaceChildren();
+  measure.replaceChildren();
 
-  const cacheClass =
-    result.cache === 'HIT' ? 'pill v-ok' : result.cache === 'OFF' ? 'v-neutral' : 'pill';
+  const cacheClass = result.cache === 'HIT' ? 'tag t-ok' : result.cache === 'OFF' ? 't-quiet' : '';
 
-  const state = result.refused ? 'recusado' : result.degraded ? 'degradado' : 'respondido';
-  const stateClass = result.degraded ? 'pill v-warn' : result.refused ? 'v-neutral' : 'pill v-ok';
+  const state = result.refused
+    ? `recusado · ${REFUSAL_LABEL[result.refusalReason ?? ''] ?? 'recusado'}`
+    : result.degraded
+      ? 'degradado'
+      : 'respondido';
 
-  measurements.append(
-    readout('rota', ROUTE_LABELS[result.route] ?? result.route, 'pill v-accent'),
-    readout('estado', state, stateClass),
-    readout('cache', result.cache, cacheClass),
-    readout('1º token', ms(result.timings.ttftMs)),
-    readout('total', ms(result.timings.totalMs)),
-    readout('tokens', `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
-    readout(
+  const stateClass = result.degraded ? 'tag t-warn' : result.refused ? 't-quiet' : 'tag t-ok';
+
+  measure.append(
+    row('rota', ROUTE_LABEL[result.route] ?? result.route, 'tag t-accent'),
+    row('estado', state, stateClass),
+    row('cache', result.cache, cacheClass),
+    row('1º token', ms(result.timings.ttftMs)),
+    row('total', ms(result.timings.totalMs)),
+    row('tokens', `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
+    row(
       'custo',
 
       result.cost.usd === 0 ? 'US$ 0' : `US$ ${result.cost.usd.toFixed(6)}`,
-      result.cost.usd === 0 ? 'v-ok' : '',
+      result.cost.usd === 0 ? 't-ok' : '',
     ),
   );
 }
 
 function renderWaterfall(perNode: Record<string, number> | null): void {
-  waterfall.replaceChildren();
-  waterfallNote.textContent = '';
+  falls.replaceChildren();
+  fallsNote.textContent = '';
 
   if (!perNode || Object.keys(perNode).length === 0) {
-    waterfallSection.hidden = true;
+    secFalls.hidden = true;
     return;
   }
 
@@ -87,44 +139,43 @@ function renderWaterfall(perNode: Record<string, number> | null): void {
   const hadFanOut = 'retrieve' in perNode && 'callHrApi' in perNode;
   const parallel = new Set(hadFanOut ? ['retrieve', 'callHrApi'] : []);
 
-  const entries = order.filter((name) => name in perNode).map((name) => ({ name, ms: perNode[name] }));
-
+  const entries = order.filter((n) => n in perNode).map((n) => ({ name: n, ms: perNode[n] }));
   if (entries.length === 0) {
-    waterfallSection.hidden = true;
+    secFalls.hidden = true;
     return;
   }
 
   const longest = Math.max(...entries.map((e) => e.ms), 1);
 
   for (const { name, ms: duration } of entries) {
-    const lane = el('div', 'lane');
-    const track = el('div', 'track');
+    const lane = el('div', 'fall');
+    const rail = el('div', 'rail');
     const bar = el('div', 'bar');
 
     bar.style.width = `${Math.max(2, (duration / longest) * 100)}%`;
-    if (parallel.has(name)) bar.dataset.parallel = 'true';
+    if (parallel.has(name)) bar.dataset.par = 'true';
 
-    track.append(bar);
-    lane.append(el('span', 'name', name), track, el('span', 'ms', String(duration)));
-    waterfall.append(lane);
+    rail.append(bar);
+    lane.append(el('span', 'n', name), rail, el('span', 'ms', String(duration)));
+    falls.append(lane);
   }
 
-  waterfallNote.textContent = hadFanOut
+  fallsNote.textContent = hadFanOut
     ? 'As barras hachuradas rodaram em paralelo, no mesmo superstep do grafo — somá-las superestimaria o total.'
     : '';
 
-  waterfallSection.hidden = false;
+  secFalls.hidden = false;
 }
 
 function renderSources(sources: Source[]): void {
   sourcesEl.replaceChildren();
 
   if (sources.length === 0) {
-    sourcesSection.hidden = false;
+    secSrc.hidden = false;
     sourcesEl.append(
       el(
         'p',
-        'placeholder',
+        'hint',
         'Nenhuma fonte citada — a resposta foi uma recusa, e recusar sem fundamentação é o comportamento correto.',
       ),
     );
@@ -132,30 +183,28 @@ function renderSources(sources: Source[]): void {
   }
 
   sources.forEach((source, i) => {
-    const block = el('div', 'source');
+    const block = el('div', 'src');
     const body = el('div');
 
     if (source.kind === 'document') {
-      body.append(el('div', 'where', `${source.file} § ${source.section}`));
-      body.append(el('div', 'detail', `similaridade ${source.score.toFixed(3)}`));
-      body.append(el('div', 'excerpt', source.excerpt));
+      body.append(el('div', 'w', `${source.file} § ${source.section}`));
+      body.append(el('div', 'd', `similaridade ${source.score.toFixed(3)}`));
+      body.append(el('div', 'x', source.excerpt));
     } else {
-      body.append(el('div', 'where', source.endpoint));
-      body.append(
-        el('div', 'detail', `campos: ${source.fields.join(', ')} · ${source.latencyMs} ms`),
-      );
+      body.append(el('div', 'w', source.endpoint));
+      body.append(el('div', 'd', `campos: ${source.fields.join(', ')} · ${source.latencyMs} ms`));
     }
 
-    block.append(el('div', 'n', String(i + 1)), body);
+    block.append(el('div', 'i', String(i + 1)), body);
     sourcesEl.append(block);
   });
 
-  sourcesSection.hidden = false;
+  secSrc.hidden = false;
 }
 
 function renderWarnings(warnings: string[]): void {
   warningsEl.replaceChildren();
-  warningsSection.hidden = warnings.length === 0;
+  secWarn.hidden = warnings.length === 0;
   for (const warning of warnings) warningsEl.append(el('div', '', `• ${warning}`));
 }
 
@@ -169,19 +218,17 @@ function paintCitations(target: HTMLElement, text: string): void {
 }
 
 function addQuestion(text: string): void {
-  empty.remove();
-  const turn = el('div', 'turn-question');
-  turn.append(el('span', '', text));
-  transcript.append(turn);
+  welcome.remove();
+  threadInner.append(el('div', 'q', text));
 }
 
 function addAnswer(): HTMLElement {
-  const node = el('div', 'turn-answer caret');
-  transcript.append(node);
+  const node = el('div', 'a caret');
+  threadInner.append(node);
   return node;
 }
 
-const scroll = () => transcript.scrollTo({ top: transcript.scrollHeight, behavior: 'smooth' });
+const scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
 
 function ask(text: string): void {
   if (busy || !text.trim()) return;
@@ -225,8 +272,8 @@ function ask(text: string): void {
 
         if (!accumulated && result.answer) paintCitations(target, result.answer);
 
-        if (result.degraded) {
-          target.append(el('div', 'badge', 'respondido com uma fonte indisponível'));
+        if (result.degraded && !result.refused) {
+          target.append(el('div', 'flag', 'respondido com uma fonte indisponível'));
         }
 
         renderMeasurements(result);
@@ -250,16 +297,30 @@ function ask(text: string): void {
   };
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  kbSimple: 'política — direta',
-  kbMulti: 'política — múltiplos documentos',
-  tool: 'dados do colaborador',
-  hybrid: 'política + dados',
-  outOfScope: 'fora de escopo',
-  adversarial: 'adversarial',
-};
+async function loadHealth(): Promise<HealthResponse | null> {
+  try {
+    const response = await fetch('/health');
+    if (!response.ok) return null;
 
-async function loadPresets(): Promise<void> {
+    const health = (await response.json()) as HealthResponse;
+
+    facts.replaceChildren();
+
+    const modelFact = el('span', 'fact');
+    modelFact.append(el('b', '', health.llm.chatModel ?? 'modelo determinístico'));
+    facts.append(modelFact);
+
+    const cacheFact = el('span', 'fact', health.cache.enabled ? 'cache ligado' : 'cache desligado');
+    cacheFact.dataset.off = String(!health.cache.enabled);
+    facts.append(cacheFact);
+
+    return health;
+  } catch {
+    return null;
+  }
+}
+
+async function loadSuggestions(): Promise<void> {
   try {
     const response = await fetch('/demo/questions');
     if (!response.ok) return;
@@ -269,19 +330,26 @@ async function loadPresets(): Promise<void> {
       chaosAvailable: boolean;
     };
 
-    for (const category of [...new Set(questions.map((q) => q.category))]) {
-      const group = document.createElement('optgroup');
-      group.label = CATEGORY_LABELS[category] ?? category;
+    suggestions.replaceChildren();
 
-      for (const question of questions.filter((q) => q.category === category)) {
-        const option = document.createElement('option');
-        option.value = question.text;
-        option.textContent = question.text;
-        option.title = `Esperado: ${question.expected}`;
-        group.append(option);
+    for (const group of SUGGESTED) {
+      const picked = questions.filter((q) => q.category === group.category).slice(0, group.take);
+      if (picked.length === 0) continue;
+
+      const block = el('div', 'suggest-group');
+      block.append(el('span', 'label', group.label));
+
+      const chips = el('div', 'chips');
+      for (const question of picked) {
+        const chip = el('button', 'chip', question.text) as HTMLButtonElement;
+        chip.type = 'button';
+        chip.title = `Esperado: ${question.expected}`;
+        chip.addEventListener('click', () => ask(question.text));
+        chips.append(chip);
       }
 
-      presets.append(group);
+      block.append(chips);
+      suggestions.append(block);
     }
 
     chaosLabel.hidden = !chaosAvailable;
@@ -310,16 +378,11 @@ form.addEventListener('submit', (event) => {
   ask(input.value);
 });
 
-presets.addEventListener('change', () => {
-  const chosen = presets.value;
-  if (!chosen) return;
-
-  input.value = chosen;
-  presets.selectedIndex = 0;
-  ask(chosen);
-});
-
 chaos.addEventListener('change', () => void toggleChaos(chaos.checked));
 
-void loadPresets();
-input.focus();
+void (async () => {
+  const health = await loadHealth();
+  renderIdleEvidence(health);
+  await loadSuggestions();
+  input.focus();
+})();

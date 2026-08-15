@@ -12,118 +12,154 @@
     if (text !== void 0) node.textContent = text;
     return node;
   };
-  var readout = (label, value, className = "") => {
-    const row = el("div", "readout");
-    row.append(el("dt", "", label), el("span", "leader"), el("dd", className, value));
-    return row;
+  var row = (label, value, valueClass = "") => {
+    const line = el("div", "row");
+    line.append(el("dt", "", label), el("span", "dots"), el("dd", valueClass, value));
+    return line;
   };
   var ms = (value) => value === null ? "\u2014" : `${value} ms`;
-  var transcript = $("transcript");
-  var empty = $("empty");
+  var thread = $("thread");
+  var threadInner = $("thread-inner");
+  var welcome = $("welcome");
+  var suggestions = $("suggestions");
   var input = $("input");
   var send = $("send");
   var form = $("form");
-  var presets = $("presets");
   var chaos = $("chaos");
   var chaosLabel = $("chaos-label");
-  var measurements = $("measurements");
-  var waterfall = $("waterfall");
-  var waterfallNote = $("waterfall-note");
+  var facts = $("facts");
+  var measure = $("measure");
+  var falls = $("falls");
+  var fallsNote = $("falls-note");
   var sourcesEl = $("sources");
   var warningsEl = $("warnings");
-  var waterfallSection = $("waterfall-section");
-  var sourcesSection = $("sources-section");
-  var warningsSection = $("warnings-section");
+  var secFalls = $("sec-falls");
+  var secSrc = $("sec-src");
+  var secWarn = $("sec-warn");
   var busy = false;
-  var ROUTE_LABELS = {
+  var ROUTE_LABEL = {
     kb: "pol\xEDticas",
     tool: "dados do RH",
     hybrid: "pol\xEDticas + RH",
     outOfScope: "fora de escopo"
   };
+  var REFUSAL_LABEL = {
+    outOfScope: "fora de escopo",
+    notGrounded: "sem fundamenta\xE7\xE3o",
+    missingIdentification: "falta matr\xEDcula",
+    sourcesUnavailable: "fontes indispon\xEDveis",
+    timedOut: "tempo esgotado"
+  };
+  var SUGGESTED = [
+    { category: "kbSimple", label: "Pol\xEDticas", take: 3 },
+    { category: "hybrid", label: "Suas informa\xE7\xF5es + pol\xEDtica", take: 2 },
+    { category: "outOfScope", label: "Fora de escopo (o agente recusa)", take: 1 }
+  ];
+  function renderIdleEvidence(health) {
+    measure.replaceChildren();
+    if (!health) {
+      measure.append(el("p", "hint", "Fa\xE7a uma pergunta para ver a medi\xE7\xE3o desta resposta."));
+      return;
+    }
+    measure.append(
+      row("provider", health.llm.provider, health.llm.provider === "fake" ? "tag t-warn" : "tag t-ok"),
+      row("modelo", health.llm.chatModel ?? "determin\xEDstico"),
+      row("embeddings", health.llm.embeddingModel ?? "determin\xEDstico"),
+      row(
+        "cache",
+        health.cache.enabled ? `ligado \xB7 ${health.cache.ttlSeconds}s` : "desligado",
+        health.cache.enabled ? "tag t-ok" : "t-quiet"
+      )
+    );
+    measure.append(
+      el(
+        "p",
+        "hint",
+        "Fa\xE7a uma pergunta: aqui aparecem a rota escolhida, o tempo de cada etapa do grafo, as fontes citadas e o custo em tokens."
+      )
+    );
+  }
   function renderMeasurements(result) {
-    measurements.replaceChildren();
-    const cacheClass = result.cache === "HIT" ? "pill v-ok" : result.cache === "OFF" ? "v-neutral" : "pill";
-    const state = result.refused ? "recusado" : result.degraded ? "degradado" : "respondido";
-    const stateClass = result.degraded ? "pill v-warn" : result.refused ? "v-neutral" : "pill v-ok";
-    measurements.append(
-      readout("rota", ROUTE_LABELS[result.route] ?? result.route, "pill v-accent"),
-      readout("estado", state, stateClass),
-      readout("cache", result.cache, cacheClass),
-      readout("1\xBA token", ms(result.timings.ttftMs)),
-      readout("total", ms(result.timings.totalMs)),
-      readout("tokens", `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
-      readout(
+    measure.replaceChildren();
+    const cacheClass = result.cache === "HIT" ? "tag t-ok" : result.cache === "OFF" ? "t-quiet" : "";
+    const state = result.refused ? `recusado \xB7 ${REFUSAL_LABEL[result.refusalReason ?? ""] ?? "recusado"}` : result.degraded ? "degradado" : "respondido";
+    const stateClass = result.degraded ? "tag t-warn" : result.refused ? "t-quiet" : "tag t-ok";
+    measure.append(
+      row("rota", ROUTE_LABEL[result.route] ?? result.route, "tag t-accent"),
+      row("estado", state, stateClass),
+      row("cache", result.cache, cacheClass),
+      row("1\xBA token", ms(result.timings.ttftMs)),
+      row("total", ms(result.timings.totalMs)),
+      row("tokens", `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
+      row(
         "custo",
 
         result.cost.usd === 0 ? "US$ 0" : `US$ ${result.cost.usd.toFixed(6)}`,
-        result.cost.usd === 0 ? "v-ok" : ""
+        result.cost.usd === 0 ? "t-ok" : ""
       )
     );
   }
   function renderWaterfall(perNode) {
-    waterfall.replaceChildren();
-    waterfallNote.textContent = "";
+    falls.replaceChildren();
+    fallsNote.textContent = "";
     if (!perNode || Object.keys(perNode).length === 0) {
-      waterfallSection.hidden = true;
+      secFalls.hidden = true;
       return;
     }
     const order = ["classify", "retrieve", "callHrApi", "grade", "generateAnswer", "refuse"];
     const hadFanOut = "retrieve" in perNode && "callHrApi" in perNode;
     const parallel = new Set(hadFanOut ? ["retrieve", "callHrApi"] : []);
-    const entries = order.filter((name) => name in perNode).map((name) => ({ name, ms: perNode[name] }));
+    const entries = order.filter((n) => n in perNode).map((n) => ({ name: n, ms: perNode[n] }));
     if (entries.length === 0) {
-      waterfallSection.hidden = true;
+      secFalls.hidden = true;
       return;
     }
     const longest = Math.max(...entries.map((e) => e.ms), 1);
     for (const { name, ms: duration } of entries) {
-      const lane = el("div", "lane");
-      const track = el("div", "track");
+      const lane = el("div", "fall");
+      const rail = el("div", "rail");
       const bar = el("div", "bar");
       bar.style.width = `${Math.max(2, duration / longest * 100)}%`;
-      if (parallel.has(name)) bar.dataset.parallel = "true";
-      track.append(bar);
-      lane.append(el("span", "name", name), track, el("span", "ms", String(duration)));
-      waterfall.append(lane);
+      if (parallel.has(name)) bar.dataset.par = "true";
+      rail.append(bar);
+      lane.append(el("span", "n", name), rail, el("span", "ms", String(duration)));
+      falls.append(lane);
     }
-    waterfallNote.textContent = hadFanOut ? "As barras hachuradas rodaram em paralelo, no mesmo superstep do grafo \u2014 som\xE1-las superestimaria o total." : "";
-    waterfallSection.hidden = false;
+    fallsNote.textContent = hadFanOut ? "As barras hachuradas rodaram em paralelo, no mesmo superstep do grafo \u2014 som\xE1-las superestimaria o total." : "";
+    secFalls.hidden = false;
   }
   function renderSources(sources) {
     sourcesEl.replaceChildren();
     if (sources.length === 0) {
-      sourcesSection.hidden = false;
+      secSrc.hidden = false;
       sourcesEl.append(
         el(
           "p",
-          "placeholder",
+          "hint",
           "Nenhuma fonte citada \u2014 a resposta foi uma recusa, e recusar sem fundamenta\xE7\xE3o \xE9 o comportamento correto."
         )
       );
       return;
     }
     sources.forEach((source, i) => {
-      const block = el("div", "source");
+      const block = el("div", "src");
       const body = el("div");
       if (source.kind === "document") {
-        body.append(el("div", "where", `${source.file} \xA7 ${source.section}`));
-        body.append(el("div", "detail", `similaridade ${source.score.toFixed(3)}`));
-        body.append(el("div", "excerpt", source.excerpt));
+        body.append(el("div", "w", `${source.file} \xA7 ${source.section}`));
+        body.append(el("div", "d", `similaridade ${source.score.toFixed(3)}`));
+        body.append(el("div", "x", source.excerpt));
       } else {
-        body.append(el("div", "where", source.endpoint));
-        body.append(
-          el("div", "detail", `campos: ${source.fields.join(", ")} \xB7 ${source.latencyMs} ms`)
-        );
+        body.append(el("div", "w", source.endpoint));
+        body.append(el("div", "d", `campos: ${source.fields.join(", ")} \xB7 ${source.latencyMs} ms`));
       }
-      block.append(el("div", "n", String(i + 1)), body);
+      block.append(el("div", "i", String(i + 1)), body);
       sourcesEl.append(block);
     });
-    sourcesSection.hidden = false;
+    secSrc.hidden = false;
   }
   function renderWarnings(warnings) {
     warningsEl.replaceChildren();
-    warningsSection.hidden = warnings.length === 0;
+    secWarn.hidden = warnings.length === 0;
     for (const warning of warnings) warningsEl.append(el("div", "", `\u2022 ${warning}`));
   }
   function paintCitations(target, text) {
@@ -134,17 +170,15 @@
     }
   }
   function addQuestion(text) {
-    empty.remove();
-    const turn = el("div", "turn-question");
-    turn.append(el("span", "", text));
-    transcript.append(turn);
+    welcome.remove();
+    threadInner.append(el("div", "q", text));
   }
   function addAnswer() {
-    const node = el("div", "turn-answer caret");
-    transcript.append(node);
+    const node = el("div", "a caret");
+    threadInner.append(node);
     return node;
   }
-  var scroll = () => transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
+  var scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
   function ask(text) {
     if (busy || !text.trim()) return;
     busy = true;
@@ -177,8 +211,8 @@
           const result = event.summary;
           if (result.refused) target.dataset.refused = "true";
           if (!accumulated && result.answer) paintCitations(target, result.answer);
-          if (result.degraded) {
-            target.append(el("div", "badge", "respondido com uma fonte indispon\xEDvel"));
+          if (result.degraded && !result.refused) {
+            target.append(el("div", "flag", "respondido com uma fonte indispon\xEDvel"));
           }
           renderMeasurements(result);
           renderWaterfall(result.timings.perNode);
@@ -198,30 +232,44 @@
       finish();
     };
   }
-  var CATEGORY_LABELS = {
-    kbSimple: "pol\xEDtica \u2014 direta",
-    kbMulti: "pol\xEDtica \u2014 m\xFAltiplos documentos",
-    tool: "dados do colaborador",
-    hybrid: "pol\xEDtica + dados",
-    outOfScope: "fora de escopo",
-    adversarial: "adversarial"
-  };
-  async function loadPresets() {
+  async function loadHealth() {
+    try {
+      const response = await fetch("/health");
+      if (!response.ok) return null;
+      const health = await response.json();
+      facts.replaceChildren();
+      const modelFact = el("span", "fact");
+      modelFact.append(el("b", "", health.llm.chatModel ?? "modelo determin\xEDstico"));
+      facts.append(modelFact);
+      const cacheFact = el("span", "fact", health.cache.enabled ? "cache ligado" : "cache desligado");
+      cacheFact.dataset.off = String(!health.cache.enabled);
+      facts.append(cacheFact);
+      return health;
+    } catch {
+      return null;
+    }
+  }
+  async function loadSuggestions() {
     try {
       const response = await fetch("/demo/questions");
       if (!response.ok) return;
       const { questions, chaosAvailable } = await response.json();
-      for (const category of [...new Set(questions.map((q) => q.category))]) {
-        const group = document.createElement("optgroup");
-        group.label = CATEGORY_LABELS[category] ?? category;
-        for (const question of questions.filter((q) => q.category === category)) {
-          const option = document.createElement("option");
-          option.value = question.text;
-          option.textContent = question.text;
-          option.title = `Esperado: ${question.expected}`;
-          group.append(option);
+      suggestions.replaceChildren();
+      for (const group of SUGGESTED) {
+        const picked = questions.filter((q) => q.category === group.category).slice(0, group.take);
+        if (picked.length === 0) continue;
+        const block = el("div", "suggest-group");
+        block.append(el("span", "label", group.label));
+        const chips = el("div", "chips");
+        for (const question of picked) {
+          const chip = el("button", "chip", question.text);
+          chip.type = "button";
+          chip.title = `Esperado: ${question.expected}`;
+          chip.addEventListener("click", () => ask(question.text));
+          chips.append(chip);
         }
-        presets.append(group);
+        block.append(chips);
+        suggestions.append(block);
       }
       chaosLabel.hidden = !chaosAvailable;
     } catch {
@@ -245,14 +293,11 @@
     event.preventDefault();
     ask(input.value);
   });
-  presets.addEventListener("change", () => {
-    const chosen = presets.value;
-    if (!chosen) return;
-    input.value = chosen;
-    presets.selectedIndex = 0;
-    ask(chosen);
-  });
   chaos.addEventListener("change", () => void toggleChaos(chaos.checked));
-  void loadPresets();
-  input.focus();
+  void (async () => {
+    const health = await loadHealth();
+    renderIdleEvidence(health);
+    await loadSuggestions();
+    input.focus();
+  })();
 })();
