@@ -73,4 +73,7 @@ export const REFUSAL_MESSAGES: Record<RefusalReason, string> = {
 
   sourcesUnavailable:
     'Não consegui consultar as fontes necessárias para responder agora. O sistema de RH não respondeu a tempo. Tente novamente em alguns instantes — se persistir, abra um chamado para o time de TI.',
+
+  timedOut:
+    'A consulta demorou mais do que o limite de tempo e foi interrompida antes de eu conseguir montar uma resposta. Prefiro não te entregar uma resposta pela metade. Tente novamente — se acontecer de novo, tente uma pergunta mais específica.',
 };

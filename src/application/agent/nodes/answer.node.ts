@@ -1,11 +1,26 @@
 import type { AgentStateType } from '../agent-state';
 import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt } from '../prompts';
 import { withRetry, remainingBudget } from '../../../shared/resilience';
-import { timed, type NodeContext, type StatePatch } from './node-context';
+import {
+  budgetLeft,
+  MIN_VIABLE_GENERATION_MS,
+  timed,
+  type NodeContext,
+  type StatePatch,
+} from './node-context';
 
 export function createAnswerNode(ctx: NodeContext) {
   return (state: AgentStateType) =>
     timed('generateAnswer', async (): Promise<StatePatch> => {
+      if (budgetLeft(ctx.deadline) < MIN_VIABLE_GENERATION_MS) {
+        return {
+          refused: true,
+          refusalReason: 'timedOut',
+          degraded: true,
+          warnings: ['tempo insuficiente para gerar a resposta dentro do prazo do request'],
+        };
+      }
+
       let streamedText = '';
 
       const onToken = ctx.onToken

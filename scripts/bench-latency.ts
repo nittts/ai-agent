@@ -79,7 +79,7 @@ function summarise(label: string, samples: Sample[]): string {
 async function main(): Promise<void> {
   const porta = await freePort();
   process.env.PORT = String(porta);
-  process.env.MOCK_API_BASE_URL = `http://127.0.0.1:${porta}/mock/v1`;
+  process.env.HR_API_BASE_URL = `http://127.0.0.1:${porta}/mock/v1`;
   process.env.LOG_LEVEL ??= 'error';
 
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -138,8 +138,8 @@ async function main(): Promise<void> {
         ttftMs: data.timings.ttftMs,
         retrievalMs: data.timings.retrievalMs,
         llmMs: data.timings.llmMs,
-        classifyMs: perNode.classificar ?? null,
-        answerMs: perNode.responder ?? null,
+        classifyMs: perNode.classify ?? null,
+        answerMs: perNode.generateAnswer ?? null,
         inputTokens: data.cost.inputTokens,
         outputTokens: data.cost.outputTokens,
         costUsd: data.cost.usd,

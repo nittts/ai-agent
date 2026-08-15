@@ -1,12 +1,15 @@
 import type { Source } from '../../../domain/answer';
 import type { AgentStateType } from '../agent-state';
+import { remainingBudget } from '../../../shared/resilience';
 import { timed, type NodeContext, type StatePatch } from './node-context';
 
 export function createRetrieveNode(ctx: NodeContext) {
   return (state: AgentStateType) =>
     timed('retrieve', async (): Promise<StatePatch> => {
       try {
-        const vector = await ctx.embeddings.embedQuery(state.question);
+        const vector = await ctx.embeddings.embedQuery(state.question, {
+          timeoutMs: remainingBudget(ctx.deadline, ctx.settings.llmTimeoutMs),
+        });
         const documents = ctx.vectorStore.search(vector, ctx.settings.topK);
 
         const sources: Source[] = documents.map((doc) => ({

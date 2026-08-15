@@ -24,7 +24,7 @@ export class FakeEmbeddings implements EmbeddingsPort {
   readonly modelName = 'fake-hashing-bow';
   readonly dimensions = FAKE_DIMENSIONS;
 
-  async embedQuery(text: string): Promise<number[]> {
+  async embedQuery(text: string, _options?: { timeoutMs?: number }): Promise<number[]> {
     return this.vectorize(text);
   }
 

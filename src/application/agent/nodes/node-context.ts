@@ -25,6 +25,12 @@ export interface NodeContext {
 
 export type StatePatch = Partial<AgentStateType>;
 
+export const MIN_VIABLE_GENERATION_MS = 1_200;
+
+export function budgetLeft(deadline: number): number {
+  return deadline - Date.now();
+}
+
 export async function timed<T extends StatePatch>(
   name: string,
   fn: () => Promise<T>,

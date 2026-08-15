@@ -1,5 +1,9 @@
+export interface EmbeddingsOptions {
+  timeoutMs?: number;
+}
+
 export interface EmbeddingsPort {
-  embedQuery(text: string): Promise<number[]>;
+  embedQuery(text: string, options?: EmbeddingsOptions): Promise<number[]>;
 
   embedDocuments(texts: string[]): Promise<number[][]>;
 

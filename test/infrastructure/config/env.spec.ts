@@ -49,6 +49,16 @@ describe('loadEnv', () => {
     expect(env.HR_API_BASE_URL).not.toContain('localhost');
   });
 
+  it('rejects a per-attempt timeout larger than the total request budget', () => {
+    expect(() =>
+      loadEnv({
+        LLM_PROVIDER: 'fake',
+        LLM_TIMEOUT_MS: '20000',
+        REQUEST_DEADLINE_MS: '15000',
+      } as NodeJS.ProcessEnv),
+    ).toThrowError(/LLM_TIMEOUT_MS.*must not exceed.*REQUEST_DEADLINE_MS/s);
+  });
+
   it('applies sane resilience and retrieval defaults', () => {
     const env = loadEnv({ LLM_PROVIDER: 'fake' } as NodeJS.ProcessEnv);
 

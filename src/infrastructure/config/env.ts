@@ -63,6 +63,16 @@ function validateCrossFieldRules(source: NodeJS.ProcessEnv): string[] {
 
   const provider = source.LLM_PROVIDER ?? 'gemini';
 
+  const attemptTimeout = Number(source.LLM_TIMEOUT_MS ?? 8_000);
+  const deadline = Number(source.REQUEST_DEADLINE_MS ?? 15_000);
+
+  if (Number.isFinite(attemptTimeout) && Number.isFinite(deadline) && attemptTimeout > deadline) {
+    errors.push(
+      `  - LLM_TIMEOUT_MS (${attemptTimeout}ms) must not exceed REQUEST_DEADLINE_MS (${deadline}ms). ` +
+        'A single attempt cannot be allowed more time than the whole request has.',
+    );
+  }
+
   if (provider === 'gemini' && !source.GEMINI_API_KEY) {
     errors.push(
       '  - GEMINI_API_KEY: required when LLM_PROVIDER=gemini. ' +

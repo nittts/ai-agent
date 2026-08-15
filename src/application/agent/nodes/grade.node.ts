@@ -1,6 +1,12 @@
 import type { RefusalReason } from '../../../domain/answer';
 import type { AgentStateType } from '../agent-state';
-import { timed, type NodeContext, type StatePatch } from './node-context';
+import {
+  budgetLeft,
+  MIN_VIABLE_GENERATION_MS,
+  timed,
+  type NodeContext,
+  type StatePatch,
+} from './node-context';
 
 export function createGradeNode(ctx: NodeContext) {
   return (state: AgentStateType) =>
@@ -11,11 +17,15 @@ export function createGradeNode(ctx: NodeContext) {
 
       if (hasRelevantDocs || hasApiData) return {};
 
-      return { refused: true, refusalReason: decideReason(state) };
+      return { refused: true, refusalReason: decideReason(state, ctx) };
     });
 }
 
-function decideReason(state: AgentStateType): RefusalReason {
+function decideReason(state: AgentStateType, ctx: NodeContext): RefusalReason {
+  if (budgetLeft(ctx.deadline) < MIN_VIABLE_GENERATION_MS && state.degraded) {
+    return 'timedOut';
+  }
+
   const neededAnId =
     (state.route === 'tool' || state.route === 'hybrid') &&
     state.classification?.employeeId === undefined &&

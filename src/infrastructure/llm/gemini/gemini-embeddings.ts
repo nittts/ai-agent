@@ -1,6 +1,9 @@
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import type { Env } from '../../config/env';
-import type { EmbeddingsPort } from '../../../application/ports/embeddings.port';
+import type {
+  EmbeddingsOptions,
+  EmbeddingsPort,
+} from '../../../application/ports/embeddings.port';
 import { withTimeout } from '../../../shared/resilience';
 
 export class GeminiEmbeddings implements EmbeddingsPort {
@@ -22,8 +25,8 @@ export class GeminiEmbeddings implements EmbeddingsPort {
     });
   }
 
-  embedQuery(text: string): Promise<number[]> {
-    return withTimeout(this.client.embedQuery(text), this.timeoutMs);
+  embedQuery(text: string, options?: EmbeddingsOptions): Promise<number[]> {
+    return withTimeout(this.client.embedQuery(text), options?.timeoutMs ?? this.timeoutMs);
   }
 
   embedDocuments(texts: string[]): Promise<number[][]> {

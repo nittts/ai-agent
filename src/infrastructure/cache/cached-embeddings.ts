@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
-import type { EmbeddingsPort } from '../../application/ports/embeddings.port';
+import type {
+  EmbeddingsOptions,
+  EmbeddingsPort,
+} from '../../application/ports/embeddings.port';
 import type { CachePort } from '../../application/ports/cache.port';
 
 export function embeddingCacheKey(text: string, model: string): string {
@@ -25,14 +28,14 @@ export class CachedEmbeddings implements EmbeddingsPort {
     this.dimensions = inner.dimensions;
   }
 
-  async embedQuery(text: string): Promise<number[]> {
+  async embedQuery(text: string, options?: EmbeddingsOptions): Promise<number[]> {
     const key = embeddingCacheKey(text, this.modelName);
 
     const cached = await this.cache.get<number[]>(key);
 
     if (cached && cached.length === this.dimensions) return cached;
 
-    const vector = await this.inner.embedQuery(text);
+    const vector = await this.inner.embedQuery(text, options);
     await this.cache.set(key, vector, this.ttlSeconds);
 
     return vector;

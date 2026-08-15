@@ -9,7 +9,9 @@ export type RefusalReason =
 
   | 'missingIdentification'
 
-  | 'sourcesUnavailable';
+  | 'sourcesUnavailable'
+
+  | 'timedOut';
 
 export interface DocumentSource {
   kind: 'document';
