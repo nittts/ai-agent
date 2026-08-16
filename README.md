@@ -69,8 +69,17 @@ sozinho. Crie o serviço a partir do GitHub e defina as variáveis:
 | `CHAOS_ENABLED` | `true` para poder demonstrar degradação ao vivo | não |
 | `LOG_LEVEL` | `info` | não |
 
-**Não defina `PORT` nem `HR_API_BASE_URL`.** O Railway injeta a `PORT`, e o
-entrypoint deriva a URL da API de RH a partir dela.
+> **Não copie o `.env` inteiro para o Railway.** Ele é um template de
+> desenvolvimento, e três variáveis dele quebram o deploy:
+>
+> | Variável | Por que não copiar |
+> |---|---|
+> | `NODE_ENV=development` | Sobrescreve o `production` da imagem e liga o log formatado, cujo pacote é devDependency e não existe lá |
+> | `PORT=3000` | O Railway injeta a porta dele; fixar outra faz o health check nunca passar |
+> | `HR_API_BASE_URL` | Aponta para a porta 3000, mas a API de RH simulada vive no próprio processo, na porta que o Railway sorteou |
+>
+> As duas primeiras hoje **degradam em vez de derrubar** — o log cai para JSON e
+> o entrypoint corrige a URL avisando. Ainda assim, não copie.
 
 Três detalhes que fazem esse deploy funcionar, e que não são óbvios:
 

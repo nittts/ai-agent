@@ -3,7 +3,20 @@ set -e
 
 export PORT="${PORT:-3000}"
 
-export HR_API_BASE_URL="${HR_API_BASE_URL:-http://127.0.0.1:${PORT}/mock/v1}"
+SELF_HR_API="http://127.0.0.1:${PORT}/mock/v1"
+
+case "${HR_API_BASE_URL:-}" in
+  "")
+    export HR_API_BASE_URL="$SELF_HR_API"
+    ;;
+  http://127.0.0.1:*|http://localhost:*|http://0.0.0.0:*)
+    if [ "$HR_API_BASE_URL" != "$SELF_HR_API" ]; then
+      echo "warn: HR_API_BASE_URL was ${HR_API_BASE_URL}, but the mock HR API runs inside this" >&2
+      echo "warn: process and only listens on ${PORT}. Using ${SELF_HR_API} instead." >&2
+      export HR_API_BASE_URL="$SELF_HR_API"
+    fi
+    ;;
+esac
 
 INDEX="${INDEX_PATH:-./eval/index-snapshot.json}"
 

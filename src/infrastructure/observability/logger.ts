@@ -22,6 +22,21 @@ export function newCorrelationId(): string {
 
 let root: Logger | undefined;
 
+export function prettyTransport(pretty: boolean, available: boolean): object {
+  if (!pretty || !available) return {};
+
+  return { transport: { target: 'pino-pretty', options: { colorize: true, singleLine: false } } };
+}
+
+function prettyAvailable(): boolean {
+  try {
+    require.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createLogger(level: string, pretty: boolean): Logger {
   root = pino({
     level,
@@ -29,9 +44,7 @@ export function createLogger(level: string, pretty: boolean): Logger {
       const id = currentCorrelationId();
       return id ? { correlationId: id } : {};
     },
-    ...(pretty
-      ? { transport: { target: 'pino-pretty', options: { colorize: true, singleLine: false } } }
-      : {}),
+    ...prettyTransport(pretty, prettyAvailable()),
   });
   return root;
 }
