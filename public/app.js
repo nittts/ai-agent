@@ -330,6 +330,8 @@
     return node;
   }
   var scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+  var REVEAL_FRAMES = 12;
+  var prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   function ask(text) {
     if (busy || !text.trim()) return;
     busy = true;
@@ -338,22 +340,56 @@
     addQuestion(text);
     const target = addAnswer();
     scroll();
-    let accumulated = "";
     const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
+    let pending = "";
+    let revealed = "";
+    let streamEnded = false;
+    let frame = 0;
+    let receivedAnything = false;
     const finish = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      if (pending) {
+        revealed += pending;
+        pending = "";
+        renderAnswer(target, revealed);
+      }
       stream.close();
       target.classList.remove("caret");
       busy = false;
       send.disabled = false;
       input.focus();
     };
+    const pump = () => {
+      if (pending.length > 0) {
+        const take = Math.max(2, Math.ceil(pending.length / REVEAL_FRAMES));
+        revealed += pending.slice(0, take);
+        pending = pending.slice(take);
+        renderAnswer(target, revealed);
+        scroll();
+      }
+      if (pending.length === 0 && streamEnded) {
+        finish();
+        return;
+      }
+      frame = requestAnimationFrame(pump);
+    };
+    const push = (chunk) => {
+      receivedAnything = true;
+      if (prefersReducedMotion()) {
+        revealed += chunk;
+        renderAnswer(target, revealed);
+        scroll();
+        return;
+      }
+      pending += chunk;
+      if (!frame) frame = requestAnimationFrame(pump);
+    };
     stream.onmessage = (message) => {
       const event = JSON.parse(message.data);
       switch (event.type) {
         case "token":
-          accumulated += event.text;
-          renderAnswer(target, accumulated);
-          scroll();
+          push(event.text);
           break;
         case "sources":
           renderSources(event.sources);
@@ -361,7 +397,10 @@
         case "done": {
           const result = event.summary;
           if (result.refused) target.dataset.refused = "true";
-          if (!accumulated && result.answer) renderAnswer(target, result.answer);
+          if (!receivedAnything && result.answer) {
+            revealed = result.answer;
+            renderAnswer(target, revealed);
+          }
           if (result.degraded && !result.refused) {
             target.append(el("div", "flag", "respondido com uma fonte indispon\xEDvel"));
           }
@@ -369,17 +408,21 @@
           renderWaterfall(result.timings.perNode);
           renderWarnings(result.warnings);
           scroll();
-          finish();
+          streamEnded = true;
+          if (!frame) finish();
           break;
         }
         case "error":
+          pending = "";
           target.textContent = `Falha ao responder: ${event.message} (correlationId ${event.correlationId})`;
+          streamEnded = true;
           finish();
           break;
       }
     };
     stream.onerror = () => {
-      if (!accumulated) target.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
+      if (!receivedAnything) target.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
+      streamEnded = true;
       finish();
     };
   }

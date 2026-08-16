@@ -276,6 +276,11 @@ function addAnswer(): HTMLElement {
 
 const scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
 
+const REVEAL_FRAMES = 12;
+
+const prefersReducedMotion = () =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
 function ask(text: string): void {
   if (busy || !text.trim()) return;
 
@@ -287,10 +292,24 @@ function ask(text: string): void {
   const target = addAnswer();
   scroll();
 
-  let accumulated = '';
   const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
 
+  let pending = '';
+  let revealed = '';
+  let streamEnded = false;
+  let frame = 0;
+  let receivedAnything = false;
+
   const finish = () => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+
+    if (pending) {
+      revealed += pending;
+      pending = '';
+      renderAnswer(target, revealed);
+    }
+
     stream.close();
     target.classList.remove('caret');
     busy = false;
@@ -298,14 +317,43 @@ function ask(text: string): void {
     input.focus();
   };
 
+  const pump = () => {
+    if (pending.length > 0) {
+      const take = Math.max(2, Math.ceil(pending.length / REVEAL_FRAMES));
+      revealed += pending.slice(0, take);
+      pending = pending.slice(take);
+      renderAnswer(target, revealed);
+      scroll();
+    }
+
+    if (pending.length === 0 && streamEnded) {
+      finish();
+      return;
+    }
+
+    frame = requestAnimationFrame(pump);
+  };
+
+  const push = (chunk: string) => {
+    receivedAnything = true;
+
+    if (prefersReducedMotion()) {
+      revealed += chunk;
+      renderAnswer(target, revealed);
+      scroll();
+      return;
+    }
+
+    pending += chunk;
+    if (!frame) frame = requestAnimationFrame(pump);
+  };
+
   stream.onmessage = (message) => {
     const event = JSON.parse(message.data) as SseEvent;
 
     switch (event.type) {
       case 'token':
-        accumulated += event.text;
-        renderAnswer(target, accumulated);
-        scroll();
+        push(event.text);
         break;
 
       case 'sources':
@@ -316,7 +364,10 @@ function ask(text: string): void {
         const result = event.summary;
         if (result.refused) target.dataset.refused = 'true';
 
-        if (!accumulated && result.answer) renderAnswer(target, result.answer);
+        if (!receivedAnything && result.answer) {
+          revealed = result.answer;
+          renderAnswer(target, revealed);
+        }
 
         if (result.degraded && !result.refused) {
           target.append(el('div', 'flag', 'respondido com uma fonte indisponível'));
@@ -326,19 +377,24 @@ function ask(text: string): void {
         renderWaterfall(result.timings.perNode);
         renderWarnings(result.warnings);
         scroll();
-        finish();
+
+        streamEnded = true;
+        if (!frame) finish();
         break;
       }
 
       case 'error':
+        pending = '';
         target.textContent = `Falha ao responder: ${event.message} (correlationId ${event.correlationId})`;
+        streamEnded = true;
         finish();
         break;
     }
   };
 
   stream.onerror = () => {
-    if (!accumulated) target.textContent = 'Conexão interrompida. O serviço está no ar?';
+    if (!receivedAnything) target.textContent = 'Conexão interrompida. O serviço está no ar?';
+    streamEnded = true;
     finish();
   };
 }

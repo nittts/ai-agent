@@ -63,6 +63,8 @@ export class AskController {
       return;
     }
 
+    reply.raw.socket?.setNoDelay(true);
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -70,6 +72,8 @@ export class AskController {
       'X-Accel-Buffering': 'no',
       'x-correlation-id': correlationId,
     });
+
+    reply.raw.flushHeaders();
 
     const send = (event: SseEvent): void => {
       if (reply.raw.writableEnded) return;
