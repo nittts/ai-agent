@@ -5,6 +5,7 @@ import type {
   Source,
   SseEvent,
 } from '../src/presentation/http/api-contract';
+import { parseMarkdown, type Inline } from '../src/shared/markdown/parse';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -208,12 +209,57 @@ function renderWarnings(warnings: string[]): void {
   for (const warning of warnings) warningsEl.append(el('div', '', `• ${warning}`));
 }
 
-function paintCitations(target: HTMLElement, text: string): void {
+function paintInline(parent: Node, tokens: Inline[]): void {
+  for (const token of tokens) {
+    switch (token.type) {
+      case 'strong':
+        parent.appendChild(el('strong', '', token.value));
+        break;
+      case 'em':
+        parent.appendChild(el('em', '', token.value));
+        break;
+      case 'code':
+        parent.appendChild(el('code', '', token.value));
+        break;
+      case 'citation':
+        parent.appendChild(el('sup', 'cite', token.value));
+        break;
+      default:
+        parent.appendChild(document.createTextNode(token.value));
+    }
+  }
+}
+
+function renderAnswer(target: HTMLElement, markdown: string): void {
   target.replaceChildren();
 
-  for (const part of text.split(/(\[\d+\])/g)) {
-    if (/^\[\d+\]$/.test(part)) target.append(el('sup', 'cite', part));
-    else target.append(document.createTextNode(part));
+  for (const block of parseMarkdown(markdown)) {
+    switch (block.type) {
+      case 'heading': {
+        const heading = el('div', `md-h md-h${Math.min(block.level, 3)}`);
+        paintInline(heading, block.inline);
+        target.append(heading);
+        break;
+      }
+      case 'list': {
+        const list = el(block.ordered ? 'ol' : 'ul', 'md-list');
+        for (const item of block.items) {
+          const li = el('li');
+          paintInline(li, item);
+          list.append(li);
+        }
+        target.append(list);
+        break;
+      }
+      case 'code':
+        target.append(el('pre', 'md-pre', block.text));
+        break;
+      default: {
+        const paragraph = el('p', 'md-p');
+        paintInline(paragraph, block.inline);
+        target.append(paragraph);
+      }
+    }
   }
 }
 
@@ -258,7 +304,7 @@ function ask(text: string): void {
     switch (event.type) {
       case 'token':
         accumulated += event.text;
-        paintCitations(target, accumulated);
+        renderAnswer(target, accumulated);
         scroll();
         break;
 
@@ -270,7 +316,7 @@ function ask(text: string): void {
         const result = event.summary;
         if (result.refused) target.dataset.refused = 'true';
 
-        if (!accumulated && result.answer) paintCitations(target, result.answer);
+        if (!accumulated && result.answer) renderAnswer(target, result.answer);
 
         if (result.degraded && !result.refused) {
           target.append(el('div', 'flag', 'respondido com uma fonte indisponível'));

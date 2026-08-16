@@ -11,6 +11,6 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["**/*.ts", "../src/http/contracts.ts"],
+  "include": ["**/*.ts", "../src/presentation/http/api-contract.ts", "../src/shared/markdown/parse.ts", "../src/domain/answer.ts"],
   "exclude": []
 }

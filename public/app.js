@@ -1,5 +1,112 @@
 "use strict";
 (() => {
+  // src/shared/markdown/parse.ts
+  var INLINE_PATTERN = /(`[^`\n]+`)|(\*\*[^\n]+?\*\*)|(\*[^*\n]+?\*)|(_[^_\n]+?_)|(\[\d+\])/g;
+  function parseInline(text) {
+    const out = [];
+    let last = 0;
+    for (const match of text.matchAll(INLINE_PATTERN)) {
+      const index = match.index ?? 0;
+      if (index > last) out.push({ type: "text", value: text.slice(last, index) });
+      const [token] = match;
+      if (token.startsWith("`")) out.push({ type: "code", value: token.slice(1, -1) });
+      else if (token.startsWith("**")) out.push({ type: "strong", value: token.slice(2, -2) });
+      else if (token.startsWith("*")) out.push({ type: "em", value: token.slice(1, -1) });
+      else if (token.startsWith("_")) out.push({ type: "em", value: token.slice(1, -1) });
+      else out.push({ type: "citation", value: token });
+      last = index + token.length;
+    }
+    if (last < text.length) out.push({ type: "text", value: text.slice(last) });
+    return out;
+  }
+  var HEADING = /^(#{1,6})\s+(.*)$/;
+  var BULLET = /^\s*[-*+]\s+(.*)$/;
+  var ORDERED = /^\s*\d+[.)]\s+(.*)$/;
+  var FENCE = /^\s*```/;
+  function parseMarkdown(source) {
+    const lines = source.split("\n");
+    const blocks = [];
+    let paragraph = [];
+    let list = null;
+    let fence = null;
+    const flushParagraph = () => {
+      if (paragraph.length === 0) return;
+      blocks.push({ type: "paragraph", inline: parseInline(paragraph.join(" ").trim()) });
+      paragraph = [];
+    };
+    const flushList = () => {
+      if (!list) return;
+      blocks.push({
+        type: "list",
+        ordered: list.ordered,
+        items: list.items.map((item) => parseInline(item))
+      });
+      list = null;
+    };
+    const flushAll = () => {
+      flushParagraph();
+      flushList();
+    };
+    for (const line of lines) {
+      if (fence !== null) {
+        if (FENCE.test(line)) {
+          blocks.push({ type: "code", text: fence.join("\n") });
+          fence = null;
+        } else {
+          fence.push(line);
+        }
+        continue;
+      }
+      if (FENCE.test(line)) {
+        flushAll();
+        fence = [];
+        continue;
+      }
+      if (line.trim() === "") {
+        flushAll();
+        continue;
+      }
+      const heading = HEADING.exec(line);
+      if (heading) {
+        flushAll();
+        blocks.push({
+          type: "heading",
+          level: heading[1].length,
+          inline: parseInline(heading[2].trim())
+        });
+        continue;
+      }
+      const ordered = ORDERED.exec(line);
+      if (ordered) {
+        flushParagraph();
+        if (!list || !list.ordered) {
+          flushList();
+          list = { ordered: true, items: [] };
+        }
+        list.items.push(ordered[1].trim());
+        continue;
+      }
+      const bullet = BULLET.exec(line);
+      if (bullet) {
+        flushParagraph();
+        if (!list || list.ordered) {
+          flushList();
+          list = { ordered: false, items: [] };
+        }
+        list.items.push(bullet[1].trim());
+        continue;
+      }
+      if (list && list.items.length > 0) {
+        list.items[list.items.length - 1] += ` ${line.trim()}`;
+        continue;
+      }
+      paragraph.push(line.trim());
+    }
+    if (fence !== null && fence.length > 0) blocks.push({ type: "code", text: fence.join("\n") });
+    flushAll();
+    return blocks;
+  }
+
   // web/app.ts
   var $ = (id) => {
     const node = document.getElementById(id);
@@ -162,11 +269,55 @@
     secWarn.hidden = warnings.length === 0;
     for (const warning of warnings) warningsEl.append(el("div", "", `\u2022 ${warning}`));
   }
-  function paintCitations(target, text) {
+  function paintInline(parent, tokens) {
+    for (const token of tokens) {
+      switch (token.type) {
+        case "strong":
+          parent.appendChild(el("strong", "", token.value));
+          break;
+        case "em":
+          parent.appendChild(el("em", "", token.value));
+          break;
+        case "code":
+          parent.appendChild(el("code", "", token.value));
+          break;
+        case "citation":
+          parent.appendChild(el("sup", "cite", token.value));
+          break;
+        default:
+          parent.appendChild(document.createTextNode(token.value));
+      }
+    }
+  }
+  function renderAnswer(target, markdown) {
     target.replaceChildren();
-    for (const part of text.split(/(\[\d+\])/g)) {
-      if (/^\[\d+\]$/.test(part)) target.append(el("sup", "cite", part));
-      else target.append(document.createTextNode(part));
+    for (const block of parseMarkdown(markdown)) {
+      switch (block.type) {
+        case "heading": {
+          const heading = el("div", `md-h md-h${Math.min(block.level, 3)}`);
+          paintInline(heading, block.inline);
+          target.append(heading);
+          break;
+        }
+        case "list": {
+          const list = el(block.ordered ? "ol" : "ul", "md-list");
+          for (const item of block.items) {
+            const li = el("li");
+            paintInline(li, item);
+            list.append(li);
+          }
+          target.append(list);
+          break;
+        }
+        case "code":
+          target.append(el("pre", "md-pre", block.text));
+          break;
+        default: {
+          const paragraph = el("p", "md-p");
+          paintInline(paragraph, block.inline);
+          target.append(paragraph);
+        }
+      }
     }
   }
   function addQuestion(text) {
@@ -201,7 +352,7 @@
       switch (event.type) {
         case "token":
           accumulated += event.text;
-          paintCitations(target, accumulated);
+          renderAnswer(target, accumulated);
           scroll();
           break;
         case "sources":
@@ -210,7 +361,7 @@
         case "done": {
           const result = event.summary;
           if (result.refused) target.dataset.refused = "true";
-          if (!accumulated && result.answer) paintCitations(target, result.answer);
+          if (!accumulated && result.answer) renderAnswer(target, result.answer);
           if (result.degraded && !result.refused) {
             target.append(el("div", "flag", "respondido com uma fonte indispon\xEDvel"));
           }
