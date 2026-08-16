@@ -136,6 +136,13 @@
       "expectedDoc": "acesso-ti.md"
     },
     {
+      "id": "meta-01",
+      "category": "meta",
+      "text": "Olá! O que você pode fazer?",
+      "expected": "Apresenta-se, lista os domínios cobertos e explica que dados pessoais exigem a matrícula. NÃO é uma recusa.",
+      "expectedDoc": null
+    },
+    {
       "id": "fora-01",
       "category": "outOfScope",
       "text": "Qual a previsão do tempo em São Paulo amanhã?",

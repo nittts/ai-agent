@@ -6,6 +6,7 @@ import { createCallHrApiNode } from './nodes/call-hr-api.node';
 import { createGradeNode } from './nodes/grade.node';
 import { createAnswerNode } from './nodes/answer.node';
 import { createRefuseNode } from './nodes/refuse.node';
+import { createMetaNode } from './nodes/meta.node';
 import type { NodeContext } from './nodes/node-context';
 
 export function buildAgentGraph(ctx: NodeContext) {
@@ -16,6 +17,7 @@ export function buildAgentGraph(ctx: NodeContext) {
     .addNode('grade', createGradeNode(ctx))
     .addNode('generateAnswer', createAnswerNode(ctx))
     .addNode('refuse', createRefuseNode())
+    .addNode('meta', createMetaNode())
 
     .addEdge(START, 'classify')
 
@@ -25,6 +27,9 @@ export function buildAgentGraph(ctx: NodeContext) {
         switch (state.route) {
           case 'outOfScope':
             return ['refuse'];
+
+          case 'meta':
+            return ['meta'];
           case 'kb':
             return ['retrieve'];
           case 'tool':
@@ -33,7 +38,7 @@ export function buildAgentGraph(ctx: NodeContext) {
             return ['retrieve', 'callHrApi'];
         }
       },
-      ['retrieve', 'callHrApi', 'refuse'],
+      ['retrieve', 'callHrApi', 'refuse', 'meta'],
     )
 
     .addEdge('retrieve', 'grade')
@@ -46,7 +51,8 @@ export function buildAgentGraph(ctx: NodeContext) {
     )
 
     .addEdge('generateAnswer', END)
-    .addEdge('refuse', END);
+    .addEdge('refuse', END)
+    .addEdge('meta', END);
 
   return graph.compile();
 }

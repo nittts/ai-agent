@@ -7,10 +7,12 @@ import { TOOL_NAMES, type ToolResult } from './tools';
 
 export const classificationSchema = z.object({
   route: z
-    .enum(['kb', 'tool', 'hybrid', 'outOfScope'])
+    .enum(['kb', 'tool', 'hybrid', 'outOfScope', 'meta'])
     .describe(
       'kb: answerable from internal policy alone. tool: needs the employee’s own data. ' +
-        'hybrid: needs BOTH a policy rule and personal data. outOfScope: not an HR/IT topic.',
+        'hybrid: needs BOTH a policy rule and personal data. ' +
+        'meta: about the assistant itself — a greeting, or what it can do. ' +
+        'outOfScope: not an HR/IT topic.',
     ),
   employeeId: z
     .number()
@@ -25,7 +27,7 @@ export const classificationSchema = z.object({
   tools: z
     .array(z.enum(TOOL_NAMES))
     .default([])
-    .describe('Tools required to answer. Empty for the kb and outOfScope routes.'),
+    .describe('Tools required to answer. Empty for the kb, outOfScope and meta routes.'),
   reason: z.string().optional().describe('Short justification when the route is outOfScope.'),
 });
 

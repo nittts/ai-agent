@@ -95,24 +95,25 @@ Trocar o Gemini ou o Redis, não.
               ┌──────────┐
   START ─────►│ classify │  1 chamada estruturada: rota + entidades
               └────┬─────┘
-        ┌──────────┼──────────────┬────────────────┐
-        ▼          ▼              ▼                ▼
-  ┌──────────┐ ┌───────────┐  as duas, EM     ┌────────┐
-  │ retrieve │ │ callHrApi │  PARALELO        │ refuse │
-  └────┬─────┘ └─────┬─────┘                  └───┬────┘
-       └─────────────┴──────────┐                 │
-                                ▼                 │
-                          ┌──────────┐            │
-                          │  grade   │            │
-                          └────┬─────┘            │
-                    ┌──────────┴────────┐         │
-                    ▼                   ▼         │
-           ┌────────────────┐     ┌────────┐      │
-           │ generateAnswer │     │ refuse │◄─────┘
-           └────────┬───────┘     └───┬────┘
-                    └────────┬────────┘
-                             ▼
-                            END
+        ┌──────────┼───────────────┬──────────────┬──────────┐
+        ▼          ▼               ▼              ▼          ▼
+  ┌──────────┐ ┌───────────┐  as duas, EM   ┌────────┐  ┌────────┐
+  │ retrieve │ │ callHrApi │   PARALELO     │ refuse │  │  meta  │
+  └────┬─────┘ └─────┬─────┘                └───┬────┘  └───┬────┘
+       └──────┬──────┘                          │           │
+              ▼                                 │           │
+        ┌──────────┐                            │           │
+        │  grade   │                            │           │
+        └────┬─────┘                            │           │
+      ┌──────┴───────┐                          │           │
+      ▼              ▼                          │           │
+┌────────────────┐ ┌────────┐                   │           │
+│ generateAnswer │ │ refuse │◄──────────────────┘           │
+└────────┬───────┘ └───┬────┘                               │
+         └──────┬──────┘                                    │
+                └──────────────────┬─────────────────────────┘
+                                   ▼
+                                  END
 ```
 
 | Nó | Responsabilidade | Chamadas ao modelo |
@@ -123,9 +124,37 @@ Trocar o Gemini ou o Redis, não.
 | `grade` | Decide responder ou recusar | **0** |
 | `generateAnswer` | Gera a resposta fundamentada, com streaming | 1 |
 | `refuse` | Texto fixo de recusa | **0** |
+| `meta` | Texto fixo sobre o próprio assistente | **0** |
 
 **Número fixo de chamadas por rota:** `kb`, `tool` e `hybrid` fazem 2;
-`outOfScope` faz 1. É isso que torna o p95 explicável.
+`outOfScope` e `meta` fazem 1. É isso que torna o p95 explicável — e as duas
+rotas de uma chamada só são, medidas, as mais rápidas do sistema (p50 885 ms e
+920 ms contra 1 831 ms da rota `kb`).
+
+### A rota `meta`, e o defeito que a originou
+
+`meta` responde a quem fala **com** o assistente em vez de **através** dele:
+uma saudação, "o que você faz", "quais assuntos você cobre".
+
+Ela existe porque a taxonomia original tinha quatro rotas e nenhuma servia. Uma
+pergunta sobre as capacidades do assistente não está em `ferias.md` e não é dado
+pessoal, então o classificador a mandava para `outOfScope` — cuja definição
+("não é assunto de RH/TI") ela genuinamente satisfazia. O modelo classificava
+**corretamente**; faltava palavra no vocabulário que demos a ele.
+
+O sintoma era um "olá" recebendo *"Não consigo ajudar com esse assunto"* — e o
+texto dessa recusa, ironicamente, lista tudo o que o assistente sabe fazer. O
+conteúdo certo, com o rótulo errado.
+
+Duas consequências que valem registrar:
+
+- **O defeito era de modelagem, não de calibração.** Parecia limiar mal
+  ajustado; era categoria faltando no domínio.
+- **A suíte não podia pegá-lo.** O classificador fake não tinha padrão para o
+  caso e caía no default `kb`, então sob teste a pergunta *funcionava*. Só o
+  modelo real, raciocinando a partir da taxonomia, produzia a recusa. Um teste
+  com o fake prova que o grafo trata a rota; ele não prova que o classificador
+  escolhe a rota. São garantias diferentes, e vale não confundi-las.
 
 ### Por que um StateGraph explícito e não `createReactAgent`
 
@@ -427,6 +456,14 @@ não é confiável.
    que já é aberto — não um buraco novo —, mas continua sendo bloqueante para
    produção. Resolver identidade (e a ACL de recuperação que vem junto) é o
    risco nº 2 do ADR.
-7. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
+7. **A suíte não cobre o julgamento do classificador.** Os testes rodam com o
+   provider fake, então provam que o **grafo** trata cada rota corretamente —
+   não que o **modelo** escolhe a rota certa. Dois defeitos reais escaparam por
+   essa fresta (o "reembolsáveis" que continha "bolsa", e o "olá" classificado
+   como fora de escopo), ambos encontrados olhando a tela. Fechar isso exigiria
+   um conjunto de avaliação de classificação rodado contra o modelo real, com
+   custo e não-determinismo — decisão consciente de não fazer aqui, mas é a
+   lacuna que eu fecharia primeiro.
+8. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
    seria `BatchSpanProcessor`; aqui é aceitável porque o destino é o console e o
    tracing fica desligado durante os benchmarks.

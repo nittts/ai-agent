@@ -523,7 +523,7 @@ para enxergá-la. É o que permite ao console desenhar a cascata e responder
 
 ### D40. A suíte inteira roda sem credencial
 
-**Verificado com o `.env` removido do disco:** 177/177 passam.
+**Verificado com o `.env` removido do disco:** 186/186 passam.
 
 **Por quê é arquitetural e não conveniência:** só é verdade se o provedor
 estiver atrás de uma interface que um fake consegue satisfazer. Essa restrição
@@ -726,6 +726,69 @@ fiação continua sendo uma só.
 
 A ordem importa e está comentada no código: o handler de estáticos reivindica o
 prefixo `/`, então `/mcp` precisa ser declarado **antes** dele.
+
+---
+
+## Conversa
+
+### D57. Uma rota `meta`, porque "o que você faz?" não é fora de escopo
+
+**O defeito:** um "olá" recebia *"Não consigo ajudar com esse assunto."*
+
+**Por que acontecia:** a taxonomia tinha quatro rotas. Uma pergunta sobre as
+capacidades do próprio assistente não está nas políticas, não é dado pessoal, e
+sobrava só `outOfScope` — cuja definição ("não é assunto de RH/TI desta
+empresa") ela genuinamente satisfaz. **O classificador estava certo.** Faltava
+palavra no vocabulário que demos a ele.
+
+Isso importa mais do que o bug: o sintoma parecia calibração (um limiar
+apertado, um prompt a ajustar) e a causa era **modelagem** — uma categoria
+ausente no domínio. Ajustar o prompt teria produzido um classificador que erra
+de forma menos previsível, não um que acerta.
+
+**A ironia que diagnosticou:** o texto de recusa de `outOfScope` lista
+exatamente tudo o que o assistente sabe fazer. O usuário perguntava "o que você
+pode fazer?" e recebia a resposta certa, embrulhada numa negativa. Conteúdo
+certo, rótulo errado.
+
+**Descartado — suavizar o texto de recusa.** Era a mudança mais barata e a
+pior: o sistema continuaria reportando `refused: true` e `route: outOfScope`.
+Uma saudação contaria como recusa no painel de evidência, nas métricas de
+qualidade e no `structuredContent` que um cliente MCP lê. Corrigiria a
+aparência mantendo o fato errado.
+
+**Descartado — gerar a resposta com o modelo.** Fraseado mais natural, e sem
+contexto recuperado para o nó `grade` avaliar: nada no grafo impediria o modelo
+de oferecer "posso abrir um chamado para você" ou "consigo aprovar suas férias".
+O único lugar onde o agente descreve a si mesmo é o último onde ele deveria
+improvisar. O texto é fixo, como os de recusa.
+
+**Medido:** `meta` custa 1 chamada ao modelo (só a classificação), p50 920 ms —
+junto com a recusa, o caminho mais barato do sistema.
+
+---
+
+### D58. O teste com o fake não prova o que parece provar
+
+**Por quê:** este defeito passou por 177 testes. O classificador fake não tinha
+padrão para "o que você pode fazer" e caía no default `kb` — **sob a suíte, a
+pergunta funcionava**. Só o modelo real, raciocinando a partir da taxonomia,
+produzia a recusa.
+
+A lição não é "o fake é ruim". É que ele responde a uma pergunta diferente da
+que parece: um teste com o fake prova que **o grafo trata a rota corretamente**;
+ele não prova que **o classificador escolhe a rota**. São garantias distintas, e
+a segunda só se verifica contra o modelo real.
+
+É a mesma classe do bug do "reembolsáveis" — que contém "bolsa" e caía num
+padrão de fora de escopo. Os dois foram encontrados olhando a tela, não rodando
+a suíte.
+
+**O que se fez a respeito:** o fake aprendeu a rota (senão nenhum teste
+conseguiria exercitá-la), e a verificação contra o Gemini real virou parte do
+procedimento — inclusive testando a **fronteira**: "Você pode me dar conselhos
+de investimento?" contém a expressão exata que marca uma pergunta meta e
+precisa continuar sendo recusada. Continua sendo.
 
 ---
 

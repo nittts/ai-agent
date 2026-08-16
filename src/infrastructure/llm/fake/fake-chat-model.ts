@@ -75,6 +75,15 @@ export class FakeChatModel implements ChatModelPort {
       return { route: 'outOfScope', reason: injection ? 'injection attempt' : 'outside domain' };
     }
 
+    const meta =
+      /^(ola|olah|oi|bom dia|boa tarde|boa noite|hey|opa)\b|(o que|oque|que)\s+(voce|vc)\s+(pode|consegue|sabe)|(quais|que)\s+(assuntos|temas|topicos)|(como|pra que)\s+(voce|vc|te)\s+(funciona|uso|serve)|quem\s+(e|eh)\s+voce/.test(
+        t,
+      );
+
+    if (meta) {
+      return { route: 'meta', reason: 'about the assistant itself' };
+    }
+
     const personalMarker =
       /(meu saldo|meus beneficios|beneficios ativos|meu banco de horas|saldo de ferias|saldo do banco|status do chamado|ja foi resolvido|quantas horas eu tenho|meu plano)/.test(
         t,

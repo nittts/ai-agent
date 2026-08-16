@@ -1,26 +1,28 @@
 Latency benchmark — model=gemini-3.5-flash-lite modo=cold rodadas=3
-gerado em 2026-08-14T21:34:47.091Z
+gerado em 2026-08-16T12:42:45.781Z
 
 group              n      p50      p95      p99      min      max      avg cost
 -------------------------------------------------------------------------------
-ALL               75     1627     3677    15005      605    15005   US$0.000453
+ALL               78     1680     3350     4591      599     4591   US$0.000529
 
-route kb          30     2355     3882    15005     1494    15005   US$0.000604
-route tool        23      823     1323     1427      655     1427   US$0.000178
-route hybrid      10     2455     3348     3348     1716     3348   US$0.000971
-route outOfScope  12      758     4276     4276      605     4276   US$0.000169
+route kb          30     1831     3517     4551     1168     4551   US$0.000663
+route tool        23     1523     2550     4591      612     4591   US$0.000389
+route hybrid      10     2312     3350     3350     1896     3350   US$0.000939
+route outOfScope  12      885     1526     1526      599     1526   US$0.000214
+route meta         3      920     1638     1638      731     1638   US$0.000166
 
-kbSimple          18     1991    15005    15005     1519    15005   US$0.000515
-kbMulti           12     2410     3677     3677     1494     3677   US$0.000737
-tool              15      823     1323     1323      704     1323   US$0.000183
-hybrid            12     2432     3348     3348      655     3348   US$0.000840
-outOfScope         9      813     4276     4276      655     4276   US$0.000171
-adversarial        9      813     1427     1427      605     1427   US$0.000164
+kbSimple          18     1694     4551     4551     1168     4551   US$0.000583
+kbMulti           12     2177     3517     3517     1297     3517   US$0.000782
+tool              15     1632     4591     4591     1291     4591   US$0.000430
+hybrid            12     2454     3350     3350     1896     3350   US$0.000883
+meta               3      920     1638     1638      731     1638   US$0.000166
+outOfScope         9      913     1526     1526      599     1526   US$0.000216
+adversarial        9      937     1436     1436      612     1436   US$0.000212
 
-infrastructure failures (degraded=true): 34/75 (45.3%)
+infrastructure failures (degraded=true): 3/78 (3.8%)
 percentiles EXCLUDING degraded requests — the agent's performance when the provider responds:
-  n=41  p50=1873ms  p95=3677ms  p99=4276ms  max=4276ms
+  n=75  p50=1709ms  p95=3350ms  p99=4591ms  max=4591ms
 
 times in ms · percentile by nearest-rank (an OBSERVED value, never interpolated)
-total benchmark cost: US$0.033955  ·  tokens: 56868
+total benchmark cost: US$0.041282  ·  tokens: 75933
 CSV: eval/results/latency.csv

@@ -126,7 +126,7 @@ entregue.
 | Caminho | Conteúdo |
 |---|---|
 | `corpus/` | 7 políticas de RH/TI em markdown. **É a base de conhecimento**, com referências cruzadas deliberadas para exercitar perguntas multi-documento |
-| `eval/questions.json` | As 25 perguntas. Alimenta o console **e** o benchmark — por isso os dois são provadamente o mesmo conjunto |
+| `eval/questions.json` | As 26 perguntas. Alimenta o console **e** o benchmark — por isso os dois são provadamente o mesmo conjunto |
 | `eval/results/` | Números medidos: `latency.csv`, `scale.csv`, `retrieval-eval.json` |
 | `scripts/ingest.ts` | Corpus → chunks → embeddings → snapshot |
 | `scripts/bench-latency.ts` | p50/p95/p99 por rota, com taxa de falha separada |

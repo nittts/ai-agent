@@ -10,6 +10,7 @@ import type { Env } from '../src/infrastructure/config/env';
 import { CACHE, type CachePort } from '../src/application/ports/cache.port';
 
 import type { AskResponse } from '../src/presentation/http/api-contract';
+import { ROUTES } from '../src/domain/answer';
 
 interface DemoQuestion {
   id: string;
@@ -194,8 +195,9 @@ async function main(): Promise<void> {
   lines.push(summarise('ALL', samples));
   lines.push('');
 
-  for (const route of ['kb', 'tool', 'hybrid', 'outOfScope']) {
-    lines.push(summarise(`route ${route}`, samples.filter((a) => a.route === route)));
+  for (const route of ROUTES) {
+    const forRoute = samples.filter((a) => a.route === route);
+    if (forRoute.length > 0) lines.push(summarise(`route ${route}`, forRoute));
   }
 
   lines.push('');

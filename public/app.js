@@ -150,7 +150,8 @@
     kb: "pol\xEDticas",
     tool: "dados do RH",
     hybrid: "pol\xEDticas + RH",
-    outOfScope: "fora de escopo"
+    outOfScope: "fora de escopo",
+    meta: "sobre o assistente"
   };
   var REFUSAL_LABEL = {
     outOfScope: "fora de escopo",
@@ -162,7 +163,8 @@
   var SUGGESTED = [
     { category: "kbSimple", label: "Pol\xEDticas", take: 3 },
     { category: "hybrid", label: "Suas informa\xE7\xF5es + pol\xEDtica", take: 2 },
-    { category: "outOfScope", label: "Fora de escopo (o agente recusa)", take: 1 }
+    { category: "outOfScope", label: "Fora de escopo (o agente recusa)", take: 1 },
+    { category: "meta", label: "Sobre o assistente", take: 1 }
   ];
   function renderIdleEvidence(health) {
     measure.replaceChildren();

@@ -57,6 +57,7 @@ const ROUTE_LABEL: Record<string, string> = {
   tool: 'dados do RH',
   hybrid: 'políticas + RH',
   outOfScope: 'fora de escopo',
+  meta: 'sobre o assistente',
 };
 
 const REFUSAL_LABEL: Record<string, string> = {
@@ -71,6 +72,7 @@ const SUGGESTED: { category: string; label: string; take: number }[] = [
   { category: 'kbSimple', label: 'Políticas', take: 3 },
   { category: 'hybrid', label: 'Suas informações + política', take: 2 },
   { category: 'outOfScope', label: 'Fora de escopo (o agente recusa)', take: 1 },
+  { category: 'meta', label: 'Sobre o assistente', take: 1 },
 ];
 
 function renderIdleEvidence(health: HealthResponse | null): void {

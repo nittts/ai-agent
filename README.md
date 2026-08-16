@@ -72,7 +72,7 @@ testes usa — útil para explorar o código sem gastar cota.
 
 ### Console web
 
-`http://localhost:3000`. Tem um seletor com as **25 perguntas do roteiro**, um
+`http://localhost:3000`. Tem um seletor com as **26 perguntas do roteiro**, um
 painel de evidência por resposta e um interruptor **"Derrubar API de RH"** que
 demonstra o comportamento degradado ao vivo.
 
@@ -194,22 +194,31 @@ estão em `eval/results/`.
 
 ### Latência (`npm run bench:latency`)
 
-25 perguntas × 3 rodadas, em série, cache ignorado. Percentil por *nearest
-rank* — o valor relatado é uma latência que realmente aconteceu.
+26 perguntas × 3 rodadas = 78 amostras, em série, cache ignorado. Percentil por
+*nearest rank* — o valor relatado é uma latência que realmente aconteceu.
 
 | | p50 | p95 | p99 | max |
 |---|---|---|---|---|
-| Todas as amostras | 1 627 ms | 3 677 ms | 15 005 ms | 15 005 ms |
-| **Excluindo requests degradados** | **1 873 ms** | **3 677 ms** | **4 276 ms** | 4 276 ms |
+| Todas as amostras | 1 680 ms | 3 350 ms | 4 591 ms | 4 591 ms |
+| **Excluindo requests degradados** (n=75) | **1 709 ms** | **3 350 ms** | **4 591 ms** | 4 591 ms |
+
+O p50 sobe ao excluir os degradados porque uma falha de infraestrutura é
+**rápida**: ela aborta antes da geração. Contá-la junto puxa a mediana para
+baixo e faz o sistema parecer melhor do que é.
 
 Por rota (p50 / p95):
 
 | Rota | p50 | p95 | Chamadas ao modelo |
 |---|---|---|---|
-| `outOfScope` (recusa) | 758 ms | 4 276 ms | **1** |
-| `tool` | 823 ms | 1 323 ms | 2 |
-| `kb` | 2 355 ms | 3 882 ms | 2 |
-| `hybrid` | 2 455 ms | 3 348 ms | 2 |
+| `outOfScope` (recusa) | 885 ms | 1 526 ms | **1** |
+| `meta` (sobre o assistente) | 920 ms | 1 638 ms | **1** |
+| `tool` | 1 523 ms | 2 550 ms | 2 |
+| `kb` | 1 831 ms | 3 517 ms | 2 |
+| `hybrid` | 2 312 ms | 3 350 ms | 2 |
+
+As duas rotas de texto fixo custam **uma** chamada ao modelo — só a
+classificação — e são as mais baratas do sistema. Recusar e se apresentar são os
+dois caminhos que não geram texto.
 
 **Gargalo identificado e corrigido.** A primeira medição deu **p99 = 51 327 ms**
 — e a causa não era o Gemini, era a nossa própria política de retry: 20 s de
@@ -228,8 +237,9 @@ resta do prazo.
 | Prazo só no retry | 2 443 | 25 638 | 39 685 | 39 685 |
 | **Prazo aplicado ao timeout** | 2 225 | 15 005 | **15 016** | 15 016 |
 
-> **Sobre a taxa de falha.** As execuções mais recentes acusam 45% de requests
-> degradados. Isso é *throttling do tier gratuito* do Gemini depois de algumas
+> **Sobre a taxa de falha.** Esta execução acusou **3,8%** (3 de 78) de requests
+> degradados; execuções feitas logo após outras, com centenas de chamadas em
+> pouco tempo, já chegaram a 45%. Isso é *throttling do tier gratuito* do Gemini depois de algumas
 > centenas de chamadas em pouco tempo — não é comportamento do agente. Por isso
 > o relatório separa os percentis limpos: reportar uma cauda sem a taxa de falha
 > ao lado seria enganoso, porque uma cauda causada pelo provedor conta uma
@@ -282,7 +292,7 @@ npm run lint
 ```
 
 **A suíte inteira roda sem nenhuma credencial.** Verificado com o `.env`
-removido do disco e sem `GEMINI_API_KEY` no ambiente: 177/177 passam.
+removido do disco e sem `GEMINI_API_KEY` no ambiente: 186/186 passam.
 
 Isso não é conveniência — é uma propriedade arquitetural. O modelo está atrás de
 uma porta (`ChatModelPort`), e os testes simplesmente sobem a aplicação com

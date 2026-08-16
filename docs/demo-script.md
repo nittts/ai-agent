@@ -1,6 +1,7 @@
 # Roteiro de demonstração
 
-8 perguntas no console + 1 passo pelo MCP, ~13 minutos. Todas as perguntas vêm
+8 perguntas no console (uma delas com um contraste em duas partes) + 1 passo
+pelo MCP, ~14 minutos. Todas as perguntas vêm
 de `eval/questions.json` — **o mesmo arquivo que alimenta o benchmark de
 latência**, então as perguntas demonstradas e as perguntas por trás do p50/p95
 são provadamente o mesmo conjunto.
@@ -103,6 +104,37 @@ vazão com provedor real empatar com a vazão sem provedor nenhum: 2 960 rps."*
 **Falar:** *"Recusa é resposta válida, HTTP 200. O texto é fixo, não gerado —
 custa zero e não pode alucinar. Repare que o caso mais comum de abuso é também
 o mais barato do sistema, invertendo o padrão em que guardrail encarece tudo."*
+
+---
+
+## 5b. O que **não** é recusa ⭐
+
+> **"Olá! O que você pode fazer?"**
+
+**Mostrar:**
+- `rota: sobre o assistente`, e **`estado: respondido`** — não recusado
+- A resposta lista os domínios cobertos e explica que dado pessoal exige matrícula
+- `total ~920 ms`, **1 chamada ao modelo** — junto com a recusa, o caminho mais
+  barato do sistema
+
+**Falar:** *"Este passo existe porque foi um bug real, e o mais instrutivo do
+projeto. Um 'olá' recebia 'Não consigo ajudar com esse assunto'. A causa não era
+o classificador: a taxonomia tinha quatro rotas, e uma pergunta sobre o próprio
+assistente não é política nem dado pessoal — sobrava `outOfScope`, cuja
+definição ela realmente satisfaz. O modelo classificava certo; faltava palavra
+no vocabulário que eu tinha dado a ele.*
+
+*O sintoma parecia calibração e a causa era modelagem — categoria faltando no
+domínio. E os 177 testes não pegaram: o classificador fake não tinha padrão para
+o caso e caía no default, então sob a suíte a pergunta funcionava. Um teste com
+fake prova que o grafo trata a rota; não prova que o classificador escolhe a
+rota. Só o modelo real produzia o defeito."*
+
+**Se perguntarem se isso não enfraqueceu a recusa:** é a primeira coisa que se
+verifica ao alargar uma taxonomia. *"Você pode me dar conselhos de
+investimento?"* contém "você pode", a expressão exata que marca uma pergunta
+meta, e continua sendo recusada — verificado contra o modelo real e travado em
+teste.
 
 ---
 
@@ -271,7 +303,7 @@ horizontal. Custo medido: p50 0,48 ms por request, contra um p50 de request de
 p99 de 51 s — causado pela **nossa** política de retry, não pelo provedor —
 e como o prazo total por request o trouxe para um teto real de 15 s.
 
-**Testes:** `npm test` → 177/177 verdes, **sem tocar em credencial nenhuma**:
+**Testes:** `npm test` → 186/186 verdes, **sem tocar em credencial nenhuma**:
 `vitest.config.ts` fixa `LLM_PROVIDER=fake`, então nenhuma chave é lida mesmo
 com `.env` no disco. *"A suíte roda sem credencial porque o modelo está atrás de
 uma porta. Não há mock de módulo: os testes sobem a aplicação real com outra

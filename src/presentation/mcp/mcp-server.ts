@@ -63,7 +63,8 @@ export function buildMcpServer({ answerQuestion, policies }: McpServerOptions): 
       description:
         'Responde perguntas sobre políticas internas de RH e TI (férias, benefícios, reembolso, ' +
         'acesso e TI, home-office, ponto e jornada, desligamento) e sobre os dados do colaborador ' +
-        'nesses sistemas. A resposta cita as fontes usadas. Perguntas fora desse domínio são recusadas. ' +
+        'nesses sistemas. A resposta cita as fontes usadas. Perguntas fora desse domínio são recusadas — ' +
+        'mas perguntar o que o assistente faz é válido e tem resposta. ' +
         'Para dados pessoais, informe a matrícula na pergunta (ex.: "meu saldo de férias, id 1042").',
       inputSchema: {
         pergunta: z
