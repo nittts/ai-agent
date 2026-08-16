@@ -15,6 +15,21 @@ import { configureApp } from './bootstrap';
 import { ENV } from './infrastructure/config/config.module';
 import type { Env } from './infrastructure/config/env';
 import { createLogger } from './infrastructure/observability/logger';
+import type { LogLevel } from '@nestjs/common';
+
+const NEST_LEVELS_BY_LOG_LEVEL: Record<Env['LOG_LEVEL'], LogLevel[]> = {
+  silent: [],
+  fatal: ['fatal'],
+  error: ['fatal', 'error'],
+  warn: ['fatal', 'error', 'warn'],
+  info: ['fatal', 'error', 'warn', 'log'],
+  debug: ['fatal', 'error', 'warn', 'log', 'debug'],
+  trace: ['fatal', 'error', 'warn', 'log', 'debug', 'verbose'],
+};
+
+function nestLogLevels(level: Env['LOG_LEVEL']): LogLevel[] {
+  return NEST_LEVELS_BY_LOG_LEVEL[level];
+}
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -25,6 +40,8 @@ async function bootstrap(): Promise<void> {
 
   const env = app.get<Env>(ENV);
   const log = createLogger(env.LOG_LEVEL, env.NODE_ENV === 'development');
+
+  app.useLogger(nestLogLevels(env.LOG_LEVEL));
 
   await configureApp(app);
 
