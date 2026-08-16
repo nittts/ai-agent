@@ -12,6 +12,8 @@ import {
   runWithContext,
 } from '../../infrastructure/observability/logger';
 import type { Source } from '../../domain/answer';
+import { createInterface } from 'node:readline/promises';
+import { MAX_HISTORY_TURNS, type ConversationTurn } from '../../domain/conversation';
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -34,10 +36,7 @@ function formatSource(source: Source): string {
 async function main(): Promise<void> {
   const question = process.argv.slice(2).join(' ').trim();
 
-  if (!question) {
-    console.error('Usage: npm run cli -- "your question here"');
-    process.exit(2);
-  }
+  const interactive = question.length === 0;
 
   const port = await freePort();
   process.env.PORT = String(port);
@@ -58,34 +57,71 @@ async function main(): Promise<void> {
 
   try {
     const answerQuestion = app.get(AnswerQuestionUseCase);
-    let streamed = false;
+    const history: ConversationTurn[] = [];
 
-    const result = await runWithContext({ correlationId: newCorrelationId() }, () =>
-      answerQuestion.execute(question, {
-        onToken: (token) => {
-          streamed = true;
-          process.stdout.write(token);
-        },
-      }),
-    );
+    const askOnce = async (text: string): Promise<void> => {
+      let streamed = false;
 
-    if (!streamed) process.stdout.write(result.answer);
-    process.stdout.write('\n');
+      const result = await runWithContext({ correlationId: newCorrelationId() }, () =>
+        answerQuestion.execute(text, {
+          history,
 
-    if (result.sources.length > 0) {
-      console.log('\nSources:');
-      for (const source of result.sources) console.log(formatSource(source));
-    }
+          onToken: (token) => {
+            streamed = true;
+            process.stdout.write(token);
+          },
+        }),
+      );
 
-    const { timings, cost, route, degraded, refused } = result;
-    console.log(
-      `\nroute=${route}${refused ? ' (refused)' : ''}${degraded ? ' (degraded)' : ''}  ` +
-        `total=${timings.totalMs}ms  tokens=${cost.inputTokens}/${cost.outputTokens}  ` +
-        `cost=US$${cost.usd.toFixed(6)}`,
-    );
+      if (!streamed) process.stdout.write(result.answer);
+      process.stdout.write('\n');
 
-    if (result.warnings.length > 0) {
-      console.log(`warnings: ${result.warnings.join('; ')}`);
+      if (result.interpretedAs) {
+        console.log(`\n(entendi como: ${result.interpretedAs})`);
+      }
+
+      if (result.sources.length > 0) {
+        console.log('\nSources:');
+        for (const source of result.sources) console.log(formatSource(source));
+      }
+
+      const { timings, cost, route, degraded, refused } = result;
+      console.log(
+        `\nroute=${route}${refused ? ' (refused)' : ''}${degraded ? ' (degraded)' : ''}  ` +
+          `total=${timings.totalMs}ms  tokens=${cost.inputTokens}/${cost.outputTokens}  ` +
+          `cost=US$${cost.usd.toFixed(6)}`,
+      );
+
+      if (result.warnings.length > 0) {
+        console.log(`warnings: ${result.warnings.join('; ')}`);
+      }
+
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: result.answer });
+      history.splice(0, Math.max(0, history.length - MAX_HISTORY_TURNS));
+    };
+
+    if (interactive) {
+      console.log('Assistente RH/TI — conversa interativa. Ctrl+C ou "sair" para encerrar.\n');
+
+      const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
+      rl.prompt();
+
+      for await (const line of rl) {
+        const text = line.trim();
+        if (text === 'sair' || text === 'exit') break;
+
+        if (text) {
+          console.log('');
+          await askOnce(text);
+          console.log('');
+        }
+
+        rl.prompt();
+      }
+
+      rl.close();
+    } else {
+      await askOnce(question);
     }
   } finally {
     await app.close();

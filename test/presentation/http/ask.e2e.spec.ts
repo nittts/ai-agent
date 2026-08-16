@@ -109,6 +109,51 @@ describe('AskController (e2e)', () => {
     );
   });
 
+  const VACATION_TURNS = [
+    { role: 'user', content: 'Quantos dias de férias eu tenho direito por ano?' },
+    { role: 'assistant', content: 'Todo colaborador CLT tem direito a 30 dias corridos de férias.' },
+  ];
+
+  it('accepts a history and reports how it understood the follow-up', async () => {
+    const response = await fetch(`${base}/ask`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'E posso vender quantos desses?', history: VACATION_TURNS }),
+    });
+
+    const body = (await response.json()) as AskResponse;
+
+    expect(response.status).toBe(200);
+    expect(body.refused).toBe(false);
+
+    expect(body.interpretedAs).toBeTruthy();
+    expect(body.interpretedAs).not.toBe('E posso vender quantos desses?');
+  });
+
+  it('reports interpretedAs as null on a single-turn question', async () => {
+    const response = await fetch(`${base}/ask`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'Quantos dias de férias eu tenho direito por ano?' }),
+    });
+
+    expect(((await response.json()) as AskResponse).interpretedAs).toBeNull();
+  });
+
+  it('ignores a malformed history instead of returning 400', async () => {
+    const response = await fetch(`${base}/ask`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        question: 'Quantos dias de férias eu tenho direito por ano?',
+        history: 'isto não é uma lista',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as AskResponse).refused).toBe(false);
+  });
+
   async function readSse(question: string): Promise<{ events: SseEvent[]; contentType: string }> {
     const response = await fetch(`${base}/ask/stream?q=${encodeURIComponent(question)}`);
     const contentType = response.headers.get('content-type') ?? '';
@@ -131,6 +176,25 @@ describe('AskController (e2e)', () => {
     const types = events.map((e) => e.type);
     expect(types.indexOf('sources')).toBeGreaterThan(types.lastIndexOf('token'));
     expect(types[types.length - 1]).toBe('done');
+  });
+
+  it('streams over POST as well, carrying the conversation in the body', async () => {
+    const response = await fetch(`${base}/ask/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'E posso vender quantos desses?', history: VACATION_TURNS }),
+    });
+
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+    const events = (await response.text())
+      .split('\n\n')
+      .filter((block) => block.startsWith('data: '))
+      .map((block) => JSON.parse(block.slice(6)) as SseEvent);
+
+    const done = events.find((e) => e.type === 'done');
+    expect(done?.type).toBe('done');
+    expect(done?.type === 'done' && done.summary.interpretedAs).toBeTruthy();
   });
 
   it('fills ttftMs on the SSE summary — and only there', async () => {

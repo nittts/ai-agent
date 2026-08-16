@@ -1,9 +1,19 @@
-export const ROUTES = ['kb', 'tool', 'hybrid', 'outOfScope', 'meta'] as const;
+export const ROUTES = [
+  'kb',
+  'tool',
+  'hybrid',
+  'outOfScope',
+  'meta',
+
+  'unresolvedFollowUp',
+] as const;
 export type Route = (typeof ROUTES)[number];
 
 export type RefusalReason =
 
   | 'outOfScope'
+
+  | 'unresolvedFollowUp'
 
   | 'notGrounded'
 

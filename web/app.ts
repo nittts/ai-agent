@@ -6,6 +6,8 @@ import type {
   SseEvent,
 } from '../src/presentation/http/api-contract';
 import { parseMarkdown, type Inline } from '../src/shared/markdown/parse';
+import { SseReader } from '../src/shared/sse/sse-reader';
+import { MAX_HISTORY_TURNS, type ConversationTurn } from '../src/domain/conversation';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -49,6 +51,9 @@ const secFalls = $('sec-falls');
 const secSrc = $('sec-src');
 const secWarn = $('sec-warn');
 const secNote = $('sec-note');
+const secInterp = $('sec-interp');
+const interpEl = $('interp');
+const resetButton = $('reset') as HTMLButtonElement;
 
 let busy = false;
 
@@ -219,6 +224,11 @@ function renderNotes(notes: string[]): void {
   for (const note of notes) notesEl.append(el('div', '', note));
 }
 
+function renderInterpretation(interpretedAs: string | null): void {
+  secInterp.hidden = !interpretedAs;
+  interpEl.textContent = interpretedAs ?? '';
+}
+
 function paintInline(parent: Node, tokens: Inline[]): void {
   for (const token of tokens) {
     switch (token.type) {
@@ -276,6 +286,17 @@ function renderAnswer(target: HTMLElement, markdown: string): void {
 function addQuestion(text: string): void {
   welcome.remove();
   threadInner.append(el('div', 'q', text));
+
+  resetButton.hidden = false;
+}
+
+function resetConversation(): void {
+  clearHistory();
+  threadInner.replaceChildren();
+  resetButton.hidden = true;
+  renderInterpretation(null);
+  input.focus();
+  location.reload();
 }
 
 function addAnswer(): HTMLElement {
@@ -291,6 +312,38 @@ const REVEAL_FRAMES = 12;
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
+const HISTORY_KEY = 'assistente-rh:conversa';
+
+function loadHistory(): ConversationTurn[] {
+  try {
+    const raw = sessionStorage.getItem(HISTORY_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as ConversationTurn[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(turns: ConversationTurn[]): void {
+  try {
+    sessionStorage.setItem(HISTORY_KEY, JSON.stringify(turns.slice(-MAX_HISTORY_TURNS)));
+  } catch {
+    void 0;
+  }
+}
+
+function remember(question: string, answer: string): void {
+  saveHistory([
+    ...loadHistory(),
+    { role: 'user', content: question },
+    { role: 'assistant', content: answer },
+  ]);
+}
+
+function clearHistory(): void {
+  sessionStorage.removeItem(HISTORY_KEY);
+}
+
 function ask(text: string): void {
   if (busy || !text.trim()) return;
 
@@ -299,10 +352,12 @@ function ask(text: string): void {
   input.value = '';
 
   addQuestion(text);
+
+  renderInterpretation(null);
   const target = addAnswer();
   scroll();
 
-  const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
+  const history = loadHistory();
 
   let pending = '';
   let revealed = '';
@@ -320,7 +375,6 @@ function ask(text: string): void {
       renderAnswer(target, revealed);
     }
 
-    stream.close();
     target.classList.remove('caret');
     busy = false;
     send.disabled = false;
@@ -358,9 +412,7 @@ function ask(text: string): void {
     if (!frame) frame = requestAnimationFrame(pump);
   };
 
-  stream.onmessage = (message) => {
-    const event = JSON.parse(message.data) as SseEvent;
-
+  const handle = (event: SseEvent): void => {
     switch (event.type) {
       case 'token':
         push(event.text);
@@ -389,6 +441,9 @@ function ask(text: string): void {
         renderNotes(result.notes);
         scroll();
 
+        remember(text, result.answer);
+        renderInterpretation(result.interpretedAs);
+
         streamEnded = true;
         if (!frame) finish();
         break;
@@ -403,11 +458,41 @@ function ask(text: string): void {
     }
   };
 
-  stream.onerror = () => {
-    if (!receivedAnything) target.textContent = 'Conexão interrompida. O serviço está no ar?';
-    streamEnded = true;
-    finish();
-  };
+  void (async () => {
+    try {
+      const response = await fetch('/ask/stream', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question: text, history }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const sse = new SseReader();
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        for (const payload of sse.feed(decoder.decode(value, { stream: true }))) {
+          handle(JSON.parse(payload) as SseEvent);
+        }
+      }
+
+      if (!streamEnded) {
+        streamEnded = true;
+        if (!frame) finish();
+      }
+    } catch {
+      if (!receivedAnything) target.textContent = 'Conexão interrompida. O serviço está no ar?';
+      streamEnded = true;
+      finish();
+    }
+  })();
 }
 
 async function loadHealth(): Promise<HealthResponse | null> {
@@ -493,7 +578,11 @@ form.addEventListener('submit', (event) => {
 
 chaos.addEventListener('change', () => void toggleChaos(chaos.checked));
 
+resetButton.addEventListener('click', resetConversation);
+
 void (async () => {
+  resetButton.hidden = loadHistory().length === 0;
+
   const health = await loadHealth();
   renderIdleEvidence(health);
   await loadSuggestions();

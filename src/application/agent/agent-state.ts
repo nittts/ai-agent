@@ -1,18 +1,27 @@
 import { Annotation } from '@langchain/langgraph';
 import { z } from 'zod';
 import type { Route, RefusalReason, Source } from '../../domain/answer';
+import type { ConversationTurn } from '../../domain/conversation';
 import type { SearchResult } from '../../domain/knowledge';
 import { addUsage, ZERO_USAGE, type TokenUsage } from '../../domain/cost';
 import { TOOL_NAMES, type ToolResult } from './tools';
 
 export const classificationSchema = z.object({
   route: z
-    .enum(['kb', 'tool', 'hybrid', 'outOfScope', 'meta'])
+    .enum(['kb', 'tool', 'hybrid', 'outOfScope', 'meta', 'unresolvedFollowUp'])
     .describe(
       'kb: answerable from internal policy alone. tool: needs the employee’s own data. ' +
         'hybrid: needs BOTH a policy rule and personal data. ' +
         'meta: about the assistant itself — a greeting, or what it can do. ' +
-        'outOfScope: not an HR/IT topic.',
+        'outOfScope: not an HR/IT topic. ' +
+        'unresolvedFollowUp: refers to an earlier turn that is missing or unusable.',
+    ),
+
+  standaloneQuestion: z
+    .string()
+    .describe(
+      'The question rewritten to stand on its own, with pronouns and ellipsis resolved ' +
+        'from the conversation. With no history, copy the question verbatim.',
     ),
   employeeId: z
     .number()
@@ -35,6 +44,16 @@ export type Classification = z.infer<typeof classificationSchema>;
 
 export const AgentState = Annotation.Root({
   question: Annotation<string>,
+
+  history: Annotation<ConversationTurn[]>({
+    reducer: (_current, next) => next,
+    default: () => [],
+  }),
+
+  standaloneQuestion: Annotation<string>({
+    reducer: (_current, next) => next,
+    default: () => '',
+  }),
 
   route: Annotation<Route>({
     reducer: (_current, next) => next,

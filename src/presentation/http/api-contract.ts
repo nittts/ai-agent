@@ -1,6 +1,7 @@
 import type { Route, RefusalReason, Source, DocumentSource, ApiSource } from '../../domain/answer';
+import type { ConversationTurn } from '../../domain/conversation';
 
-export type { Route, RefusalReason, Source, DocumentSource, ApiSource };
+export type { Route, RefusalReason, Source, DocumentSource, ApiSource, ConversationTurn };
 
 export interface Cost {
   inputTokens: number;
@@ -23,6 +24,8 @@ export interface AskRequest {
   question: string;
 
   bypassCache?: boolean;
+
+  history?: ConversationTurn[];
 }
 
 export interface AskResponse {
@@ -42,6 +45,8 @@ export interface AskResponse {
   cache: 'HIT' | 'MISS' | 'OFF';
   timings: Timings;
   cost: Cost;
+
+  interpretedAs: string | null;
 
   correlationId: string;
 }

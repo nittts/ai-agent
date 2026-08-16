@@ -1,7 +1,7 @@
 # Roteiro de demonstração
 
-8 perguntas no console (uma delas com um contraste em duas partes) + 1 passo
-pelo MCP, ~14 minutos. Todas as perguntas vêm
+8 perguntas no console (algumas com contrastes em duas partes) + 1 passo pelo
+MCP, ~18 minutos. Todas as perguntas vêm
 de `eval/questions.json` — **o mesmo arquivo que alimenta o benchmark de
 latência**, então as perguntas demonstradas e as perguntas por trás do p50/p95
 são provadamente o mesmo conjunto.
@@ -135,6 +135,70 @@ verifica ao alargar uma taxonomia. *"Você pode me dar conselhos de
 investimento?"* contém "você pode", a expressão exata que marca uma pergunta
 meta, e continua sendo recusada — verificado contra o modelo real e travado em
 teste.
+
+---
+
+## 5c. Conversa — o follow-up ⭐
+
+> **"Quantos dias de férias eu tenho direito por ano?"**
+> e em seguida, **sem repetir o assunto**:
+> **"E posso vender quantos desses?"**
+
+**Mostrar no painel:**
+- A seção **"Entendi sua pergunta como"** → *"Quantos dias dos 30 dias de férias
+  eu posso vender?"*
+- A resposta correta, com a fonte de abono pecuniário
+- O botão **"Nova conversa"** no topo, que apareceu junto com o primeiro turno
+
+**Falar:** *"O follow-up funciona, e repare no painel: ele mostra como
+reinterpretou a pergunta. Sem isso, memória de conversa é invisível — uma boa
+resposta parece igual quer o agente tenha resolvido o 'desses', quer tenha
+acertado por sorte nas palavras-chave. E acerta por sorte com frequência, porque
+o documento recuperado costuma repetir o contexto. Mostrar a reescrita é o mesmo
+argumento que a citação faz para fundamentação, aplicado à compreensão."*
+
+**O que dizer se perguntarem como foi feito** — e é a parte que vale a demo:
+
+*"Três decisões. Primeira: o servidor não guarda sessão. O histórico é do
+cliente e viaja no request — sessionStorage no console, processo na CLI,
+argumento de tool no MCP. O desenho óbvio seria conversationId no Redis, e isso
+destruiria a propriedade que o ADR usa para escalar: qualquer réplica atende
+qualquer request.*
+
+*Segunda: a reescrita não custa chamada extra. Ela sai do mesmo schema que o
+classificador já devolvia. O padrão da indústria é uma chamada de condensação
+antes de classificar — somaria 700 a 900 ms a toda pergunta e quebraria o número
+fixo de chamadas por rota.*
+
+*Terceira, e é onde a maioria deixa o buraco: é a pergunta reescrita que vai
+para a busca vetorial, não só para o prompt de geração. 'E no ano que vem?'
+vetorizado como veio não chega perto da política de férias — a recuperação volta
+vazia e o sistema recusa por falta de fundamentação. O usuário leria 'não
+encontrei' quando o problema era que ninguém resolveu o pronome."*
+
+**Custo, se perguntarem:** +86 ms e +47% em tokens, medido. E o cache sobrevive:
+um follow-up não lê o cache, mas **escreve** sob a chave da pergunta reescrita —
+que é auto-contida. O tráfego de turno único, que é a maioria e o que os 2 960
+rps mediram, não mudou em nada.
+
+**Encerrar clicando em "Nova conversa"**, para o próximo passo começar limpo.
+
+---
+
+## 5d. Quando o contexto não dá para recuperar
+
+> **Com a conversa zerada**, perguntar: **"e aquilo que a gente falou?"**
+
+**Mostrar:** `rota: follow-up não resolvido`, e a mensagem **própria**:
+
+> *"Parece que você está se referindo a algo da mensagem anterior, mas não
+> consegui recuperar esse contexto. Pode repetir mencionando o assunto?"*
+
+**Falar:** *"Este passo é o seguro. Antes, essa pergunta recebia a mesma
+mensagem de quem pergunta sobre futebol — 'não consigo ajudar com esse assunto'.
+Isso não lê como uma limitação, lê como um bot burro. Cada motivo de recusa
+merece um texto em que o usuário possa agir. Mesmo quando o sistema erra, ele
+precisa errar parecendo deliberado."*
 
 ---
 
@@ -303,7 +367,7 @@ horizontal. Custo medido: p50 0,48 ms por request, contra um p50 de request de
 p99 de 51 s — causado pela **nossa** política de retry, não pelo provedor —
 e como o prazo total por request o trouxe para um teto real de 15 s.
 
-**Testes:** `npm test` → 186/186 verdes, **sem tocar em credencial nenhuma**:
+**Testes:** `npm test` → 202/202 verdes, **sem tocar em credencial nenhuma**:
 `vitest.config.ts` fixa `LLM_PROVIDER=fake`, então nenhuma chave é lida mesmo
 com `.env` no disco. *"A suíte roda sem credencial porque o modelo está atrás de
 uma porta. Não há mock de módulo: os testes sobem a aplicação real com outra

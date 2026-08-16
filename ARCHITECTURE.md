@@ -58,6 +58,9 @@ Isso é a evidência prática de que a hexagonal está fazendo trabalho, e não
 apenas nomeando pastas. O teste é direto: acrescentar uma boca nova custou um
 arquivo em `presentation/` e um módulo de fiação.
 
+Os quatro transportes também compartilham a memória de conversa, e nenhum deles
+guarda sessão: o histórico é do cliente e viaja no request.
+
 O MCP expõe **uma** tool (`perguntar_rh`, o agente inteiro) e as 7 políticas
 como *resources*. Deliberadamente **não** expõe as tools de RH cruas
 (`get_vacation_balance` e afins): republicá-las entregaria dado sem
@@ -127,9 +130,54 @@ Trocar o Gemini ou o Redis, não.
 | `meta` | Texto fixo sobre o próprio assistente | **0** |
 
 **Número fixo de chamadas por rota:** `kb`, `tool` e `hybrid` fazem 2;
-`outOfScope` e `meta` fazem 1. É isso que torna o p95 explicável — e as duas
+`outOfScope`, `meta` e `unresolvedFollowUp` fazem 1. É isso que torna o p95 explicável — e as duas
 rotas de uma chamada só são, medidas, as mais rápidas do sistema (p50 885 ms e
 920 ms contra 1 831 ms da rota `kb`).
+
+### Memória de conversa, sem sessão no servidor
+
+Follow-ups funcionam — *"e no ano que vem?"*, *"e posso vender quantos
+desses?"* — e nenhuma linha de estado foi para o servidor.
+
+**O histórico viaja no request.** O cliente é dono do transcript: o console o
+guarda em `sessionStorage`, a CLI no processo, e um cliente MCP passa os turnos
+como argumento da tool. O servidor lê o que recebeu e esquece.
+
+O desenho óbvio era um `conversationId` com os turnos no Redis. Funcionaria, e
+custaria exatamente a propriedade sobre a qual o ADR apoia o escalonamento: *"a
+API não guarda sessão, então qualquer réplica atende qualquer request"*. Servidor
+dono de conversa precisa de sticky session ou store compartilhado no primeiro dia
+da segunda réplica — e o transporte MCP, deliberadamente sem sessão, teria de
+ganhar uma.
+
+**A reescrita não custa chamada nenhuma.** O nó `classify` já fazia uma chamada
+estruturada; ele agora devolve também `standaloneQuestion`, a pergunta reescrita
+para se sustentar sozinha. Isso preserva o *número fixo de chamadas por rota*,
+que é o argumento central deste grafo — a alternativa usual (uma chamada extra
+de condensação antes de classificar) somaria ~700-900 ms a toda pergunta.
+
+**É a reescrita que vai para a recuperação.** Esse é o ponto que faz a diferença:
+*"e no ano que vem?"* vetorizado como veio não chega perto da política de férias,
+a recuperação volta vazia e o `grade` recusa por falta de fundamentação. O
+usuário veria "não encontrei" quando o problema real era que ninguém resolveu o
+pronome.
+
+**O cache sobrevive, e melhora.** Com contexto, a mesma pergunta em conversas
+diferentes tem respostas diferentes, então um follow-up **não lê** o cache. Mas
+ele **escreve** sob a chave da pergunta *reescrita*, que é auto-contida: uma
+conversa perguntando *"e posso vender quantos desses?"* popula a entrada de
+*"quantos dos 30 dias de férias posso vender?"*, e a próxima pessoa que
+perguntar isso direto acerta. O tráfego de turno único — a maioria esmagadora, e
+o que os 2 960 rps mediram — mantém exatamente o comportamento que tinha.
+
+**O que foi medido:** +86 ms (+5,5%) e +47% em tokens com ~375 tokens de
+histórico. Repare que 375 viram ~854 na entrada: o histórico é pago em **toda**
+chamada de modelo da rota.
+
+**E quando não dá para resolver**, existe a rota `unresolvedFollowUp`, com
+mensagem própria. Ela não é firula: usar a recusa de `outOfScope` faria *"e
+aquilo que falamos?"* receber a mesma resposta de quem pergunta sobre futebol, e
+uma limitação declarada passaria a parecer um assistente quebrado.
 
 ### A rota `meta`, e o defeito que a originou
 
@@ -446,8 +494,13 @@ não é confiável.
    pessoal não cacheia. Resolver isso é pré-requisito para produção.
 3. **Avaliação de retrieval com amostra pequena.** 14 perguntas com gabarito
    sobre um corpus bem separado. Piso de sanidade, não prova de robustez.
-4. **Sem memória de conversa.** Cada pergunta é independente. Follow-ups do
-   tipo *"e no ano que vem?"* não funcionam.
+4. **Memória de conversa sem persistência no servidor.** Follow-ups funcionam,
+   mas o transcript é do cliente e vive na aba (`sessionStorage`) ou no processo
+   da CLI. Fechou a aba, acabou a conversa. Foi escolha deliberada — ver
+   *Memória de conversa* na seção 2 —, e o custo é que o cliente **pode mentir**
+   sobre o histórico. Hoje isso não muda nada, porque quem forja um turno também
+   poderia fazer a pergunta direto; sob uma ACL passaria a importar, e o
+   histórico teria de ser assinado ou guardado no servidor.
 5. **Uma tool por hop.** A seleção é feita pelo classificador em um hop fixo;
    perguntas que exigissem descoberta em etapas não são atendidas. Foi uma
    troca consciente por previsibilidade de cauda.

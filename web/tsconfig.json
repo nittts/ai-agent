@@ -11,6 +11,6 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["**/*.ts", "../src/presentation/http/api-contract.ts", "../src/shared/markdown/parse.ts", "../src/domain/answer.ts"],
+  "include": ["**/*.ts", "../src/presentation/http/api-contract.ts", "../src/shared/markdown/parse.ts", "../src/shared/sse/sse-reader.ts", "../src/domain/answer.ts", "../src/domain/conversation.ts"],
   "exclude": []
 }

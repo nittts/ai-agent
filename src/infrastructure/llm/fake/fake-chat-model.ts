@@ -58,7 +58,13 @@ export class FakeChatModel implements ChatModelPort {
   }
 
   private classify(text: string): Record<string, unknown> {
-    const t = normalize(text);
+    const marker = 'PERGUNTA ATUAL:';
+    const at = text.indexOf(marker);
+    const question = at === -1 ? text : text.slice(at + marker.length).trim();
+    const history = at === -1 ? '' : text.slice(0, at);
+
+    const standaloneQuestion = this.rewrite(question, history);
+    const t = normalize(standaloneQuestion);
 
     const employeeId = /\b(?:id|matricula|colaborador)\D{0,12}(\d{3,6})\b/.exec(t)?.[1];
     const ticketId = /\bchamado\D{0,12}(\d{3,6})\b/.exec(t)?.[1];
@@ -72,7 +78,15 @@ export class FakeChatModel implements ChatModelPort {
       /(ignore as instrucoes|revele o seu prompt|prompt de sistema|system prompt)/.test(t);
 
     if (outOfScope || injection) {
-      return { route: 'outOfScope', reason: injection ? 'injection attempt' : 'outside domain' };
+      return {
+        route: 'outOfScope',
+        standaloneQuestion,
+        reason: injection ? 'injection attempt' : 'outside domain',
+      };
+    }
+
+    if (/^(e|mas|entao)?\s*(aquilo|isso|aquele|aquela|o que falamos|o que voce disse)\b/.test(t)) {
+      return { route: 'unresolvedFollowUp', standaloneQuestion, reason: 'no usable history' };
     }
 
     const meta =
@@ -81,7 +95,7 @@ export class FakeChatModel implements ChatModelPort {
       );
 
     if (meta) {
-      return { route: 'meta', reason: 'about the assistant itself' };
+      return { route: 'meta', standaloneQuestion, reason: 'about the assistant itself' };
     }
 
     const personalMarker =
@@ -100,10 +114,41 @@ export class FakeChatModel implements ChatModelPort {
 
     return {
       route,
+      standaloneQuestion,
       tools: route === 'kb' ? [] : this.inferTools(t),
       ...(employeeId ? { employeeId: Number(employeeId) } : {}),
       ...(ticketId ? { ticketId: Number(ticketId) } : {}),
     };
+  }
+
+  private rewrite(question: string, history: string): string {
+    if (!history.trim()) return question;
+
+    const t = normalize(question);
+
+    const elliptical =
+      /\b(desses|dessas|disso|deles|delas|aquilo|isso)\b/.test(t) ||
+      /^(e|mas|entao)\b/.test(t) ||
+      t.split(/\s+/).length <= 6;
+
+    if (!elliptical) return question;
+
+    const subjects: [needle: string, display: string][] = [
+      ['ferias', 'férias'],
+      ['beneficios', 'benefícios'],
+      ['reembolso', 'reembolso'],
+      ['home office', 'home-office'],
+      ['banco de horas', 'banco de horas'],
+      ['chamado', 'chamado'],
+    ];
+
+    const found = subjects
+      .filter(([needle]) => normalize(history).includes(needle))
+      .map(([, display]) => display);
+
+    if (found.length === 0) return question;
+
+    return `${question} (sobre ${found.join(' e ')})`;
   }
 
   private inferTools(t: string): string[] {

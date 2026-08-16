@@ -12,6 +12,7 @@ Se você tem meia hora e quer entender o sistema, siga estes seis arquivos:
 | # | Arquivo | Por que primeiro |
 |---|---|---|
 | 1 | `src/domain/answer.ts` | O que o sistema produz: resposta, fonte, motivo de recusa |
+| 1b | `src/domain/conversation.ts` | Por que o histórico é do cliente e não do servidor — o trade-off inteiro em um comentário |
 | 2 | `src/application/ports/` | As cinco fronteiras — o "contrato" com o mundo externo |
 | 3 | `src/application/agent/agent-graph.ts` | O fluxo inteiro, em um diagrama e ~40 linhas |
 | 4 | `src/application/use-cases/answer-question.use-case.ts` | O caso de uso: cache, grafo, custo |
@@ -104,7 +105,7 @@ entregue.
 | `http/ask.controller.ts` | `POST /ask` e `GET /ask/stream` (SSE). Mede o TTFT — só o transporte sabe quando o byte saiu |
 | `http/health.controller.ts` | Reporta a configuração **efetiva**, para o avaliador saber qual provider está ativo |
 | `http/demo.controller.ts` | Serve `eval/questions.json` ao console |
-| `cli/cli.ts` | O mesmo caso de uso, outro transporte |
+| `cli/cli.ts` | O mesmo caso de uso, outro transporte. Sem argumento, abre conversa interativa |
 | `mcp/mcp-server.ts` | Monta o servidor MCP: a tool `perguntar_rh` e o corpus como *resources*, a partir de uma **allowlist** |
 | `mcp/mcp.plugin.ts` | Registra `/mcp` no Fastify. Servidor e transporte novos por request — sem estado de sessão |
 | `mock-hr-api/*` | A API de RH simulada + o interruptor de caos |

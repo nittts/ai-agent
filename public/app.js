@@ -107,6 +107,31 @@
     return blocks;
   }
 
+  // src/shared/sse/sse-reader.ts
+  var SseReader = class {
+    buffer = "";
+
+    feed(chunk) {
+      this.buffer += chunk.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const payloads = [];
+      let cut;
+      while ((cut = this.buffer.indexOf("\n\n")) >= 0) {
+        const block = this.buffer.slice(0, cut);
+        this.buffer = this.buffer.slice(cut + 2);
+        const lines = block.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).replace(/^ /, ""));
+        if (lines.length > 0) payloads.push(lines.join("\n"));
+      }
+      return payloads;
+    }
+
+    remainder() {
+      return this.buffer;
+    }
+  };
+
+  // src/domain/conversation.ts
+  var MAX_HISTORY_TURNS = 6;
+
   // web/app.ts
   var $ = (id) => {
     const node = document.getElementById(id);
@@ -145,6 +170,9 @@
   var secSrc = $("sec-src");
   var secWarn = $("sec-warn");
   var secNote = $("sec-note");
+  var secInterp = $("sec-interp");
+  var interpEl = $("interp");
+  var resetButton = $("reset");
   var busy = false;
   var ROUTE_LABEL = {
     kb: "pol\xEDticas",
@@ -278,6 +306,10 @@
     secNote.hidden = notes.length === 0;
     for (const note of notes) notesEl.append(el("div", "", note));
   }
+  function renderInterpretation(interpretedAs) {
+    secInterp.hidden = !interpretedAs;
+    interpEl.textContent = interpretedAs ?? "";
+  }
   function paintInline(parent, tokens) {
     for (const token of tokens) {
       switch (token.type) {
@@ -332,6 +364,15 @@
   function addQuestion(text) {
     welcome.remove();
     threadInner.append(el("div", "q", text));
+    resetButton.hidden = false;
+  }
+  function resetConversation() {
+    clearHistory();
+    threadInner.replaceChildren();
+    resetButton.hidden = true;
+    renderInterpretation(null);
+    input.focus();
+    location.reload();
   }
   function addAnswer() {
     const node = el("div", "a caret");
@@ -341,15 +382,43 @@
   var scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
   var REVEAL_FRAMES = 12;
   var prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  var HISTORY_KEY = "assistente-rh:conversa";
+  function loadHistory() {
+    try {
+      const raw = sessionStorage.getItem(HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveHistory(turns) {
+    try {
+      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(turns.slice(-MAX_HISTORY_TURNS)));
+    } catch {
+      void 0;
+    }
+  }
+  function remember(question, answer) {
+    saveHistory([
+      ...loadHistory(),
+      { role: "user", content: question },
+      { role: "assistant", content: answer }
+    ]);
+  }
+  function clearHistory() {
+    sessionStorage.removeItem(HISTORY_KEY);
+  }
   function ask(text) {
     if (busy || !text.trim()) return;
     busy = true;
     send.disabled = true;
     input.value = "";
     addQuestion(text);
+    renderInterpretation(null);
     const target = addAnswer();
     scroll();
-    const stream = new EventSource(`/ask/stream?q=${encodeURIComponent(text)}`);
+    const history = loadHistory();
     let pending = "";
     let revealed = "";
     let streamEnded = false;
@@ -363,7 +432,6 @@
         pending = "";
         renderAnswer(target, revealed);
       }
-      stream.close();
       target.classList.remove("caret");
       busy = false;
       send.disabled = false;
@@ -394,8 +462,7 @@
       pending += chunk;
       if (!frame) frame = requestAnimationFrame(pump);
     };
-    stream.onmessage = (message) => {
-      const event = JSON.parse(message.data);
+    const handle = (event) => {
       switch (event.type) {
         case "token":
           push(event.text);
@@ -418,6 +485,8 @@
           renderWarnings(result.warnings);
           renderNotes(result.notes);
           scroll();
+          remember(text, result.answer);
+          renderInterpretation(result.interpretedAs);
           streamEnded = true;
           if (!frame) finish();
           break;
@@ -430,11 +499,36 @@
           break;
       }
     };
-    stream.onerror = () => {
-      if (!receivedAnything) target.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
-      streamEnded = true;
-      finish();
-    };
+    void (async () => {
+      try {
+        const response = await fetch("/ask/stream", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: text, history })
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const sse = new SseReader();
+        for (; ; ) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          for (const payload of sse.feed(decoder.decode(value, { stream: true }))) {
+            handle(JSON.parse(payload));
+          }
+        }
+        if (!streamEnded) {
+          streamEnded = true;
+          if (!frame) finish();
+        }
+      } catch {
+        if (!receivedAnything) target.textContent = "Conex\xE3o interrompida. O servi\xE7o est\xE1 no ar?";
+        streamEnded = true;
+        finish();
+      }
+    })();
   }
   async function loadHealth() {
     try {
@@ -498,7 +592,9 @@
     ask(input.value);
   });
   chaos.addEventListener("change", () => void toggleChaos(chaos.checked));
+  resetButton.addEventListener("click", resetConversation);
   void (async () => {
+    resetButton.hidden = loadHistory().length === 0;
     const health = await loadHealth();
     renderIdleEvidence(health);
     await loadSuggestions();

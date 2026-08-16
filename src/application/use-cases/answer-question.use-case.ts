@@ -8,6 +8,7 @@ import type { CachePort } from '../ports/cache.port';
 import type { HrDirectoryPort } from '../ports/hr-directory.port';
 import { buildAgentGraph } from '../agent/agent-graph';
 import type { AgentStateType } from '../agent/agent-state';
+import { sanitiseHistory, type ConversationTurn } from '../../domain/conversation';
 
 export interface AnswerQuestionSettings {
   topK: number;
@@ -23,6 +24,8 @@ export interface AskOptions {
   onToken?: (token: string) => void;
 
   bypassCache?: boolean;
+
+  history?: readonly ConversationTurn[];
 }
 
 export interface Timings {
@@ -46,6 +49,8 @@ export interface AnswerResult {
   notes: string[];
   refused: boolean;
   refusalReason: RefusalReason | null;
+
+  interpretedAs: string | null;
   cache: 'HIT' | 'MISS' | 'OFF';
   timings: Timings;
   cost: Cost;
@@ -90,9 +95,12 @@ export class AnswerQuestionUseCase {
 
   async execute(question: string, options: AskOptions = {}): Promise<AnswerResult> {
     const start = Date.now();
-    const key = answerCacheKey(question, this.model.modelName, this.vectorStore.corpusVersion());
+    const history = sanitiseHistory(options.history ?? []);
 
-    if (!options.bypassCache) {
+    const key = answerCacheKey(question, this.model.modelName, this.vectorStore.corpusVersion());
+    const isFollowUp = history.length > 0;
+
+    if (!options.bypassCache && !isFollowUp) {
       const cached = await this.cache.get<CacheableAnswer>(key);
 
       if (cached) {
@@ -103,6 +111,8 @@ export class AnswerQuestionUseCase {
           degraded: false,
           warnings: [],
           notes: [],
+
+          interpretedAs: null,
           cache: 'HIT',
           timings: { totalMs: Date.now() - start, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
 
@@ -122,10 +132,14 @@ export class AnswerQuestionUseCase {
       onToken: options.onToken,
     });
 
-    const finalState = (await graph.invoke({ question })) as AgentStateType;
+    const finalState = (await graph.invoke({ question, history })) as AgentStateType;
     const result = this.toResult(finalState, start);
 
-    await this.maybeCache(key, finalState, result);
+    const writeKey = isFollowUp
+      ? answerCacheKey(finalState.standaloneQuestion, this.model.modelName, this.vectorStore.corpusVersion())
+      : key;
+
+    await this.maybeCache(writeKey, finalState, result);
 
     return result;
   }
@@ -168,6 +182,11 @@ export class AnswerQuestionUseCase {
       notes: state.notes,
       refused: state.refused,
       refusalReason: state.refusalReason,
+
+      interpretedAs:
+        state.standaloneQuestion && state.standaloneQuestion !== state.question
+          ? state.standaloneQuestion
+          : null,
       cache: this.cache.enabled ? 'MISS' : 'OFF',
       timings: {
         totalMs: Date.now() - start,

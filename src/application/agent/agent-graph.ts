@@ -30,6 +30,9 @@ export function buildAgentGraph(ctx: NodeContext) {
 
           case 'meta':
             return ['meta'];
+
+          case 'unresolvedFollowUp':
+            return ['refuse'];
           case 'kb':
             return ['retrieve'];
           case 'tool':

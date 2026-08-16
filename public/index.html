@@ -186,6 +186,18 @@
       }
       .switch:hover { border-color: var(--line-2); }
       .switch input { accent-color: var(--warn); width: 14px; height: 14px; margin: 0; }
+
+      .ghost {
+        font: 600 12px/1 var(--font);
+        color: var(--ink-2);
+        background: var(--panel);
+        border: 1px solid var(--line-2);
+        border-radius: 999px;
+        padding: 8px 13px;
+        cursor: pointer;
+        transition: color 120ms, border-color 120ms;
+      }
+      .ghost:hover { color: var(--accent-ink); border-color: var(--accent); }
       .switch[data-on='true'] {
         color: var(--warn);
         font-weight: 600;
@@ -500,6 +512,16 @@
       @keyframes grow { from { transform: scaleX(0); } }
       .note { margin-top: 11px; font-size: 11.5px; line-height: 1.55; color: var(--ink-3); }
 
+      .interp {
+        margin: 0;
+        font: 13px/1.5 var(--font);
+        color: var(--ink);
+        background: var(--accent-wash);
+        border-left: 2px solid var(--accent);
+        border-radius: 0 5px 5px 0;
+        padding: 9px 12px;
+      }
+
       /* sources */
       .src { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 11px 0; }
       .src + .src { border-top: 1px dotted var(--line-2); }
@@ -550,6 +572,12 @@
         <input type="checkbox" id="chaos" />
         Derrubar API de RH
       </label>
+      <!--
+        A conversa sobrevive ao reload (sessionStorage), então é preciso um jeito
+        explícito de zerá-la. Sem isso, numa demo o contexto de uma pergunta
+        vaza para a próxima e o agente parece responder a coisa errada.
+      -->
+      <button type="button" class="ghost" id="reset" hidden>Nova conversa</button>
     </header>
 
     <main class="stage">
@@ -587,6 +615,16 @@
         <section id="sec-measure">
           <h2 class="label">Medição</h2>
           <dl id="measure"></dl>
+        </section>
+
+        <!--
+          Aparece SÓ quando o agente reinterpretou a pergunta. Numa pergunta
+          isolada não há nada a mostrar, e um painel que repete a pergunta de
+          volta em toda resposta ensina o leitor a ignorar o painel.
+        -->
+        <section id="sec-interp" hidden>
+          <h2 class="label">Entendi sua pergunta como</h2>
+          <p class="interp" id="interp"></p>
         </section>
 
         <section id="sec-falls" hidden>

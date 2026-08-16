@@ -523,7 +523,7 @@ para enxergá-la. É o que permite ao console desenhar a cascata e responder
 
 ### D40. A suíte inteira roda sem credencial
 
-**Verificado com o `.env` removido do disco:** 186/186 passam.
+**Verificado com o `.env` removido do disco:** 202/202 passam.
 
 **Por quê é arquitetural e não conveniência:** só é verdade se o provedor
 estiver atrás de uma interface que um fake consegue satisfazer. Essa restrição
@@ -789,6 +789,135 @@ conseguiria exercitá-la), e a verificação contra o Gemini real virou parte do
 procedimento — inclusive testando a **fronteira**: "Você pode me dar conselhos
 de investimento?" contém a expressão exata que marca uma pergunta meta e
 precisa continuar sendo recusada. Continua sendo.
+
+---
+
+## Memória de conversa
+
+### D59. O histórico é do cliente e viaja no request
+
+**Por quê:** o desenho reflexo é um `conversationId` com os turnos no Redis. Ele
+funciona e cobra caro: destrói a propriedade sobre a qual o ADR apoia o
+escalonamento — *"a API não guarda sessão, então qualquer réplica atende
+qualquer request"*. Servidor dono de conversa precisa de sticky session ou store
+compartilhado no primeiro dia da segunda réplica, e o transporte MCP,
+deliberadamente sem sessão, teria de ganhar uma.
+
+Com o transcript no cliente — `sessionStorage` no console, memória de processo
+na CLI, argumento de tool no MCP — o servidor lê o que recebeu e esquece. É como
+a API da OpenAI funciona, pela mesma razão.
+
+**O custo, dito:** o cliente **pode mentir** sobre o histórico. Hoje isso não
+muda nada, porque quem forja um turno também poderia fazer a pergunta
+diretamente — não há autenticação em lugar nenhum. Sob uma ACL passaria a
+importar, e o histórico teria de ser assinado ou guardado no servidor. Cai junto
+com o risco nº 2 do ADR, e não antes dele.
+
+**Descartado — `localStorage`:** o transcript contém dado do colaborador.
+`sessionStorage` é escopado à aba e apaga quando ela fecha, o que é uma decisão
+de retenção, não de armazenamento.
+
+---
+
+### D60. A reescrita sai do schema que o classificador já devolvia
+
+**Por quê:** o padrão da indústria é uma chamada de condensação antes de
+classificar — pega o histórico, devolve a pergunta auto-contida. Funciona, e
+custa **mais uma ida ao modelo**: ~700-900 ms, +45% no p50 da rota `kb`. Pior,
+quebra a propriedade que este grafo inteiro é argumentado em cima: número fixo
+de chamadas por rota.
+
+O nó `classify` já fazia uma chamada estruturada e já extraía `employeeId` e
+`ticketId`. Acrescentar `standaloneQuestion` à saída custa ~30 tokens e **zero
+chamadas**. É o tipo de economia que só aparece quando o passo já existe pelo
+motivo certo.
+
+**Medido:** +86 ms (+5,5%) de latência e +47% em tokens com ~375 tokens de
+histórico. Repare que 375 viram ~854 na entrada — o histórico é pago em **toda**
+chamada de modelo da rota.
+
+---
+
+### D61. É a pergunta reescrita que vai para a recuperação
+
+**Por quê:** é aqui que a maioria das implementações deixa o buraco. Passar o
+histórico só para o prompt de geração conserta a redação e **não** conserta a
+busca: *"e no ano que vem?"* vetorizado como veio não chega perto de
+`ferias.md`, a recuperação volta vazia, e o nó `grade` recusa por falta de
+fundamentação.
+
+O usuário então lê *"não encontrei essa informação nas políticas"* quando o
+problema real era que ninguém resolveu o pronome — um diagnóstico errado
+entregue com confiança, que é o pior modo de falha de um sistema RAG.
+
+Uma substituição de uma linha em `retrieve.node.ts` é o que faz a memória
+funcionar de verdade.
+
+---
+
+### D62. Um follow-up não lê o cache, mas escreve nele
+
+**Por quê:** a chave deriva da pergunta normalizada. Com contexto, *"e no ano que
+vem?"* significa coisas diferentes em conversas diferentes, e servir uma da
+entrada da outra seria um bug de **correção** fantasiado de performance.
+
+Então um follow-up **pula a leitura**. Mas escreve sob a chave da pergunta
+*reescrita*, que é auto-contida e portanto genuinamente compartilhável: uma
+conversa que perguntou *"e posso vender quantos desses?"* popula a entrada de
+*"quantos dos 30 dias de férias posso vender?"*, e quem perguntar isso direto
+depois acerta.
+
+Efeito líquido: o tráfego de turno único — a maioria esmagadora, e o que os
+2 960 rps mediram — mantém exatamente o comportamento que tinha. Conversas pagam
+um miss e deixam o cache melhor do que encontraram.
+
+---
+
+### D63. `unresolvedFollowUp` é uma rota, não uma variação de `outOfScope`
+
+**Por quê:** foi o problema que originou todo este trabalho. Sem ela, *"e aquilo
+que a gente falou?"* recebe **a mesma mensagem de quem pergunta sobre futebol**.
+Isso não lê como "não tenho esse contexto" — lê como *"o bot é burro"*, e
+transforma uma limitação declarada em defeito aparente aos olhos de quem assiste
+a uma demonstração.
+
+A mensagem própria diz o que aconteceu e o que fazer, com exemplo. Mesmo quando
+o sistema erra, ele erra parecendo deliberado. É a mesma tese de [D14] e da rota
+`meta`: cada motivo de recusa merece um texto que o usuário possa **agir** em
+cima.
+
+---
+
+### D64. `interpretedAs` na resposta, porque memória invisível não é conferível
+
+**Por quê:** sem isso, uma boa resposta para *"e no ano que vem?"* parece
+idêntica quer o agente tenha resolvido a referência, quer tenha acertado por
+sorte nas palavras-chave. E acertar por sorte acontece bastante: o documento
+recuperado costuma repetir o contexto que a conversa tinha, o que faz um sistema
+sem memória nenhuma parecer ter memória.
+
+Expor a reescrita transforma *"parece que ele entendeu"* em *"foi exatamente
+isto que ele entendeu"*. É o mesmo argumento que as citações fazem para
+fundamentação, aplicado à compreensão — e o console mostra o campo **só quando
+ele difere** da pergunta, porque um painel que ecoa a pergunta de volta em toda
+resposta ensina o leitor a ignorá-lo.
+
+---
+
+### D65. O console passou a fazer streaming por POST, e o GET continuou existindo
+
+**Por quê:** `EventSource` só emite GET, então a conversa teria de caber na query
+string — frágil e limitada por tetos de URL que ninguém controla. Ler o corpo com
+`fetch` remove o teto e, de brinde, elimina a reconexão automática do
+`EventSource`, que exigia uma guarda explícita porque repetir o request
+duplicava a resposta.
+
+O `GET /ask/stream?q=` **ficou**: o `curl -N` de uma linha está no README e no
+roteiro de demo, e um comando que funciona vale ser mantido. Os dois caminhos
+compartilham o mesmo handler e os dois têm teste.
+
+Os quadros são parseados pelo **mesmo `SseReader`** que o servidor usa para ler o
+stream do Gemini — incluindo a normalização de CRLF que um bug muito caro pagou.
 
 ---
 

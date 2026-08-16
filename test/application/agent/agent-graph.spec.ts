@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildAgentGraph } from '../../../src/application/agent/agent-graph';
 import type { AgentStateType } from '../../../src/application/agent/agent-state';
+import type { ConversationTurn } from '../../../src/domain/conversation';
 import { FakeChatModel } from '../../../src/infrastructure/llm/fake/fake-chat-model';
 import { FakeEmbeddings } from '../../../src/infrastructure/llm/fake/fake-embeddings';
 import { InMemoryVectorStore } from '../../../src/infrastructure/retrieval/in-memory-vector-store';
@@ -96,6 +97,16 @@ describe('agent graph', () => {
       deadline: Date.now() + 15_000,
       onToken,
     }).invoke({ question }) as Promise<AgentStateType>;
+
+  const runWithHistory = (question: string, history: ConversationTurn[]) =>
+    buildAgentGraph({
+      model,
+      embeddings,
+      vectorStore: store,
+      hr,
+      settings: { topK: 4, minScore: 0.18, llmTimeoutMs: 8_000, llmMaxRetries: 2 },
+      deadline: Date.now() + 15_000,
+    }).invoke({ question, history }) as Promise<AgentStateType>;
 
   it('kb route: answers from a document and cites the source', async () => {
     const state = await run('Quantos dias de férias eu tenho direito por ano?');
@@ -204,6 +215,50 @@ describe('agent graph', () => {
 
     expect(model.structuredCalls).toBe(1);
     expect(model.generationCalls).toBe(0);
+  });
+
+  const VACATION_TURNS: ConversationTurn[] = [
+    { role: 'user', content: 'Quantos dias de férias eu tenho direito por ano?' },
+    { role: 'assistant', content: 'Todo colaborador CLT tem direito a 30 dias corridos de férias após 12 meses de período aquisitivo.' },
+  ];
+
+  it('resolves a follow-up into a standalone question', async () => {
+    const state = await runWithHistory('E posso vender quantos desses?', VACATION_TURNS);
+
+    expect(state.standaloneQuestion.toLowerCase()).toContain('férias');
+    expect(state.standaloneQuestion).not.toBe('E posso vender quantos desses?');
+    expect(state.refused).toBe(false);
+  });
+
+  it('retrieval runs on the REWRITTEN question, not the raw one', async () => {
+    const state = await runWithHistory('e no ano que vem?', VACATION_TURNS);
+
+    expect(state.refused).toBe(false);
+
+    expect(state.sources.some((s) => s.kind === 'document' && s.file === 'ferias.md')).toBe(true);
+  });
+
+  it('without history the standalone question IS the question', async () => {
+    const state = await run('Quantos dias de férias eu tenho direito por ano?');
+
+    expect(state.standaloneQuestion).toBe('Quantos dias de férias eu tenho direito por ano?');
+  });
+
+  it('conversation memory adds NO model call — still 2 on the kb route', async () => {
+    await runWithHistory('e no ano que vem?', VACATION_TURNS);
+
+    expect(model.structuredCalls).toBe(1);
+    expect(model.generationCalls).toBe(1);
+  });
+
+  it('an unresolvable follow-up gets its OWN refusal, not the off-topic one', async () => {
+    const state = await runWithHistory('e aquilo que falamos?', []);
+
+    expect(state.refused).toBe(true);
+    expect(state.refusalReason).toBe('unresolvedFollowUp');
+    expect(state.answer).not.toContain('Não consigo ajudar com esse assunto');
+
+    expect(state.answer.toLowerCase()).toContain('mensagem anterior');
   });
 
   it.each([

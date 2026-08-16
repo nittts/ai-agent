@@ -79,7 +79,11 @@ demonstra o comportamento degradado ao vivo.
 ### CLI
 
 ```bash
+# uma pergunta
 npm run cli -- "Tenho 18 dias de férias (id 1042). Posso vender 10 dias?"
+
+# sem argumento: conversa interativa, com memória entre os turnos
+npm run cli
 ```
 
 ```
@@ -117,6 +121,50 @@ curl -N "127.0.0.1:3000/ask/stream?q=Posso%20vender%20f%C3%A9rias%3F"
 curl -s 127.0.0.1:3000/health | jq
 ```
 
+### Conversa
+
+Follow-ups funcionam nos quatro transportes, **e o servidor não guarda sessão**.
+
+```
+Você: Quantos dias de férias eu tenho direito por ano?
+  → 30 dias corridos após 12 meses de período aquisitivo [1]
+
+Você: E posso vender quantos desses?
+  → entendi como: "Quantos dias dos 30 dias de férias eu posso vender?"
+  → no máximo 1/3, ou seja 10 dias [1]
+```
+
+O histórico é do **cliente** e viaja no request: o console guarda em
+`sessionStorage`, a CLI no processo, um cliente MCP passa como argumento da
+tool. Isso mantém a propriedade que o ADR usa para escalar — qualquer réplica
+atende qualquer request, sem nada replicado.
+
+```bash
+curl -s -X POST 127.0.0.1:3000/ask \
+  -H 'content-type: application/json' \
+  -d '{"question":"E posso vender quantos desses?",
+       "history":[{"role":"user","content":"Quantos dias de férias eu tenho por ano?"},
+                  {"role":"assistant","content":"30 dias corridos após 12 meses."}]}' | jq
+```
+
+A resposta traz `interpretedAs` — a pergunta reescrita — para que a
+reinterpretação seja **conferível** em vez de mágica. É `null` quando nada
+precisou ser resolvido.
+
+Três decisões que valem nota:
+
+- **A reescrita não custa chamada extra.** Sai do mesmo schema que o
+  classificador já devolvia. A alternativa comum — uma chamada de condensação
+  antes de classificar — somaria ~700-900 ms a toda pergunta e quebraria o
+  número fixo de chamadas por rota.
+- **É a reescrita que vai para a busca vetorial.** *"e no ano que vem?"* como
+  veio não recupera nada; é aí que está o buraco que a maioria das
+  implementações deixa aberto.
+- **Quando não dá para resolver**, a recusa é própria e diz o que fazer — não a
+  mesma mensagem de quem pergunta sobre futebol.
+
+Custo medido: **+86 ms (+5,5%)** e **+47%** em tokens por request.
+
 ### MCP
 
 O mesmo agente também é um **servidor MCP** (Model Context Protocol), em
@@ -127,7 +175,7 @@ O que é exposto:
 
 | Primitiva | Nome | O que faz |
 |---|---|---|
-| Tool | `perguntar_rh` | O agente inteiro: RAG + tools de RH, resposta em português com fontes citadas |
+| Tool | `perguntar_rh` | O agente inteiro: RAG + tools de RH, resposta em português com fontes citadas. Aceita `historico` opcional, para follow-ups sem sessão no servidor |
 | Resources | `hr://policy/<arquivo>.md` | As 7 políticas do corpus, para o cliente ler o documento que uma citação aponta |
 
 ```bash
@@ -292,7 +340,7 @@ npm run lint
 ```
 
 **A suíte inteira roda sem nenhuma credencial.** Verificado com o `.env`
-removido do disco e sem `GEMINI_API_KEY` no ambiente: 186/186 passam.
+removido do disco e sem `GEMINI_API_KEY` no ambiente: 202/202 passam.
 
 Isso não é conveniência — é uma propriedade arquitetural. O modelo está atrás de
 uma porta (`ChatModelPort`), e os testes simplesmente sobem a aplicação com

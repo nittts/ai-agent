@@ -12,6 +12,8 @@ const answerShape = {
   route: z.string(),
   refused: z.boolean(),
   refusalReason: z.string().nullable(),
+
+  interpretedAs: z.string().nullable(),
   degraded: z.boolean(),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
@@ -72,10 +74,19 @@ export function buildMcpServer({ answerQuestion, policies }: McpServerOptions): 
           .min(1)
           .max(2_000)
           .describe('A pergunta, em português, do colaborador.'),
+
+        historico: z
+          .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() }))
+          .optional()
+          .describe(
+            'Turnos anteriores desta conversa, do mais antigo ao mais recente. ' +
+              'Envie quando a pergunta se referir a algo já dito (ex.: "e no ano que vem?"). ' +
+              'Apenas os últimos turnos são considerados.',
+          ),
       },
       outputSchema: answerShape,
     },
-    async ({ pergunta }) => {
+    async ({ pergunta, historico }) => {
       if (!pergunta.trim()) {
         return {
           isError: true,
@@ -83,13 +94,14 @@ export function buildMcpServer({ answerQuestion, policies }: McpServerOptions): 
         };
       }
 
-      const result = await answerQuestion.execute(pergunta);
+      const result = await answerQuestion.execute(pergunta, { history: historico ?? [] });
 
       const structuredContent = {
         answer: result.answer,
         route: result.route,
         refused: result.refused,
         refusalReason: result.refusalReason,
+        interpretedAs: result.interpretedAs,
         degraded: result.degraded,
         warnings: result.warnings,
         notes: result.notes,

@@ -7,7 +7,7 @@ export function createRetrieveNode(ctx: NodeContext) {
   return (state: AgentStateType) =>
     timed('retrieve', async (): Promise<StatePatch> => {
       try {
-        const vector = await ctx.embeddings.embedQuery(state.question, {
+        const vector = await ctx.embeddings.embedQuery(state.standaloneQuestion, {
           timeoutMs: remainingBudget(ctx.deadline, ctx.settings.llmTimeoutMs),
         });
         const documents = ctx.vectorStore.search(vector, ctx.settings.topK);

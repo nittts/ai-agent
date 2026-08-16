@@ -124,6 +124,30 @@ describe('MCP transport (e2e)', () => {
     expect(body.result.content[0].text.length).toBeGreaterThan(0);
   });
 
+  it('resolves a follow-up from history passed as a tool argument', async () => {
+    const { body } = await rpc('tools/call', {
+      name: 'perguntar_rh',
+      arguments: {
+        pergunta: 'E posso vender quantos desses?',
+        historico: [
+          { role: 'user', content: 'Quantos dias de férias eu tenho direito por ano?' },
+          { role: 'assistant', content: 'Todo colaborador CLT tem direito a 30 dias corridos.' },
+        ],
+      },
+    });
+
+    expect(body.result.isError).toBeFalsy();
+    expect(body.result.structuredContent.refused).toBe(false);
+    expect(body.result.structuredContent.interpretedAs).toBeTruthy();
+  });
+
+  it('advertises the history parameter, or no client would ever send it', async () => {
+    const { body } = await rpc('tools/list');
+    const tool = body.result.tools.find((t: { name: string }) => t.name === 'perguntar_rh');
+
+    expect(Object.keys(tool.inputSchema.properties)).toContain('historico');
+  });
+
   it('rejects an empty question', async () => {
     const { body } = await rpc('tools/call', {
       name: 'perguntar_rh',

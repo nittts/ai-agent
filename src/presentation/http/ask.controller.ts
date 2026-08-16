@@ -14,8 +14,20 @@ import type { FastifyReply } from 'fastify';
 import { AnswerQuestionUseCase } from '../../application/use-cases/answer-question.use-case';
 import { currentCorrelationId, newCorrelationId } from '../../infrastructure/observability/logger';
 import type { AskResponse, SseEvent } from './api-contract';
+import { sanitiseHistory, type ConversationTurn } from '../../domain/conversation';
 
 const MAX_QUESTION_LENGTH = 2_000;
+
+function validateHistory(value: unknown): ConversationTurn[] {
+  if (!Array.isArray(value)) return [];
+
+  return sanitiseHistory(
+    value.filter(
+      (turn): turn is ConversationTurn =>
+        typeof turn === 'object' && turn !== null && 'role' in turn && 'content' in turn,
+    ),
+  );
+}
 
 function validateQuestion(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -41,11 +53,14 @@ export class AskController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  async ask(@Body() body: { question?: unknown; bypassCache?: unknown }): Promise<AskResponse> {
+  async ask(
+    @Body() body: { question?: unknown; bypassCache?: unknown; history?: unknown },
+  ): Promise<AskResponse> {
     const correlationId = currentCorrelationId() ?? newCorrelationId();
 
     const result = await this.answerQuestion.execute(validateQuestion(body?.question), {
       bypassCache: body?.bypassCache === true,
+      history: validateHistory(body?.history),
     });
 
     return { ...result, correlationId };
@@ -53,8 +68,6 @@ export class AskController {
 
   @Get('stream')
   async stream(@Query('q') q: string, @Res() reply: FastifyReply): Promise<void> {
-    const correlationId = currentCorrelationId() ?? newCorrelationId();
-
     let question: string;
     try {
       question = validateQuestion(q);
@@ -62,6 +75,32 @@ export class AskController {
       reply.status(400).send({ error: 'invalid_question', message: 'Provide ?q= with the question.' });
       return;
     }
+
+    await this.streamAnswer(question, [], reply);
+  }
+
+  @Post('stream')
+  async streamPost(
+    @Body() body: { question?: unknown; history?: unknown },
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    let question: string;
+    try {
+      question = validateQuestion(body?.question);
+    } catch {
+      reply.status(400).send({ error: 'invalid_question', message: 'Provide a question.' });
+      return;
+    }
+
+    await this.streamAnswer(question, validateHistory(body?.history), reply);
+  }
+
+  private async streamAnswer(
+    question: string,
+    history: ConversationTurn[],
+    reply: FastifyReply,
+  ): Promise<void> {
+    const correlationId = currentCorrelationId() ?? newCorrelationId();
 
     reply.raw.socket?.setNoDelay(true);
 
@@ -85,6 +124,7 @@ export class AskController {
 
     try {
       const result = await this.answerQuestion.execute(question, {
+        history,
         onToken: (token) => {
           ttftMs ??= Date.now() - start;
           send({ type: 'token', text: token });

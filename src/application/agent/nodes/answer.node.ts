@@ -40,7 +40,7 @@ export function createAnswerNode(ctx: NodeContext) {
             ctx.model.generate({
               system: ANSWER_SYSTEM_PROMPT,
               user: buildAnswerPrompt(
-                state.question,
+                state.standaloneQuestion,
                 state.documents,
                 state.toolResults,
                 state.warnings,
