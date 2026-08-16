@@ -57,12 +57,8 @@ async function freePort(): Promise<number> {
 
 async function waitForHealth(base: string, attempts = 60): Promise<void> {
   for (let i = 0; i < attempts; i++) {
-    try {
-      const r = await fetch(`${base}/health`);
-      if (r.ok) return;
-    } catch {
-      void 0;
-    }
+    const r = await fetch(`${base}/health`).catch(() => null);
+    if (r?.ok) return;
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error(`Service did not respond at ${base}/health`);
