@@ -1,13 +1,21 @@
 # Roteiro de demonstração
 
-8 perguntas, ~10 minutos. Todas vêm de `eval/questions.json` — **o mesmo arquivo
-que alimenta o benchmark de latência**, então as perguntas demonstradas e as
-perguntas por trás do p50/p95 são provadamente o mesmo conjunto.
+8 perguntas no console + 1 passo pelo MCP, ~13 minutos. Todas as perguntas vêm
+de `eval/questions.json` — **o mesmo arquivo que alimenta o benchmark de
+latência**, então as perguntas demonstradas e as perguntas por trás do p50/p95
+são provadamente o mesmo conjunto.
 
 **Preparação:** `docker compose up` e abrir `http://localhost:3000`. O seletor
-"Perguntas do roteiro" tem todas elas agrupadas por categoria.
+"Perguntas do roteiro" tem todas elas agrupadas por categoria. Deixe um terminal
+aberto ao lado, para o passo 9.
 
-Em cada passo, o que olhar está no **painel de evidência à direita**.
+Nos passos 1–8, o que olhar está no **painel de evidência à direita**.
+
+> **Nos comandos `curl`, use `127.0.0.1` e não `localhost`.** Em máquinas onde
+> `localhost` resolve para `::1` primeiro, o curl conecta no IPv6, o servidor
+> escuta em `0.0.0.0` e a conexão morre **sem fallback** — porque o TCP chegou a
+> conectar. O navegador não sofre disso (faz Happy Eyeballs de verdade), o curl
+> sim. Não é o tipo de coisa que se quer descobrir ao vivo.
 
 ---
 
@@ -148,15 +156,127 @@ teste exercitam o mesmo caminho."*
 
 ---
 
+## 9. O quarto transporte — MCP ⭐
+
+O mesmo agente é um **servidor MCP**. Um cliente MCP — Claude Desktop, uma IDE,
+outro agente — consulta o RH pelo protocolo padrão, sem API proprietária.
+
+**a) O que o servidor publica:**
+
+```bash
+curl -sN -X POST 127.0.0.1:3000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  | sed -n 's/^data: //p' | jq -c '[.result.tools[].name]'
+```
+
+```
+["perguntar_rh"]
+```
+
+**Falar:** *"Uma tool só, e repare no que NÃO está aqui:
+`get_vacation_balance`, `get_benefits`, `get_hours_bank`. O caminho óbvio seria
+publicar as tools de RH — um proxy fino sobre a API. Isso entregaria dado sem
+fundamentação e jogaria para o cliente toda a responsabilidade que este projeto
+assume: recuperar a política aplicável, citar a fonte, recusar sem base,
+degradar de forma explícita, contar custo. Publicando o agente, o cliente herda
+tudo isso. E se eu publicasse os dois caminhos, o cliente escolheria o mais
+barato — que é justamente o sem grounding."*
+
+**b) A mesma pergunta do passo 2, agora por MCP:**
+
+```bash
+curl -sN -X POST 127.0.0.1:3000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+        "name":"perguntar_rh",
+        "arguments":{"pergunta":"Qual o meu saldo de férias? Meu id é 1042."}}}' \
+  | sed -n 's/^data: //p' \
+  | jq '{texto: .result.content[0].text,
+         evidencia: (.result.structuredContent
+                     | {rota: .route, fontes: [.sources[].label],
+                        custo: .cost.usd, ms: .totalMs})}'
+```
+
+```json
+{
+  "texto": "O seu saldo de férias é de 18 dias disponíveis [1].",
+  "evidencia": {
+    "rota": "tool",
+    "fontes": ["GET /employees/1042/vacation-balance"],
+    "custo": 0.000342,
+    "ms": 1651
+  }
+}
+```
+
+> A redação e o `ms` variam a cada execução (é geração); o que é estável e vale
+> apontar é `rota`, `fontes` e a ordem de grandeza do custo.
+
+**Falar:** *"Mesma resposta, mesma evidência do passo 2 — texto em `content`,
+rastreabilidade em `structuredContent`. Nenhuma linha de `application/` ou
+`domain/` mudou para o MCP existir: custou um arquivo em `presentation/` e um
+módulo de fiação. Esse é o teste real da hexagonal — não o diagrama, o preço de
+acrescentar uma boca nova."*
+
+**c) A recusa, no vocabulário do protocolo:**
+
+```bash
+# ...  "arguments":{"pergunta":"Qual a previsão do tempo em São Paulo amanhã?"}
+```
+
+```json
+{"isError": false, "recusou": true, "motivo": "outOfScope", "custo": 0.00018}
+```
+
+**Falar:** *"`isError: false`. No MCP, `isError` significa 'a tool quebrou' —
+uma recusa fundamentada é o agente funcionando. Marcá-la como erro faria um
+cliente bem-comportado tentar de novo, gastando cota para receber a mesma
+recusa, ou mostrar falha de sistema ao usuário quando declinar era o certo. O
+motivo vai em `refusalReason`, onde dá para agir sobre ele. É a mesma escolha
+que o HTTP faz devolvendo 200 numa recusa."*
+
+**d) Os documentos, e a tentativa de sair deles:**
+
+```bash
+# resources/list  →  as 7 políticas
+["hr://policy/acesso-ti.md", "hr://policy/beneficios.md", ...]
+
+# resources/read com uri "hr://policy/../../.env"
+{"code": -32602, "message": "MCP error -32602: Resource hr://policy/.env not found"}
+```
+
+**Falar:** *"O corpus também é exposto como resources, então o cliente lê o
+documento que uma citação aponta. URIs vêm do cliente e viram leitura de
+arquivo, então o corpus é lido uma vez no boot e vira uma allowlist. Repare na
+mensagem: não é 'acesso negado', é **not found**. O arquivo não foi rejeitado
+por um filtro — ele não existe no mapa. A diferença entre garantia e filtro é
+que o filtro alguém precisa manter correto para sempre, contra normalização,
+percent-encoding e symlink. Tem teste com três variações de traversal, que
+também assere que a resposta não contém `GEMINI_API_KEY`."*
+
+**Se perguntarem sobre sessão:** o transporte é stateless — servidor e
+transporte novos por request, sem `sessionId`. Qualquer réplica atende qualquer
+request, que é a propriedade sobre a qual o ADR apoia o escalonamento
+horizontal. Custo medido: p50 0,48 ms por request, contra um p50 de request de
+~1,9 s.
+
+---
+
 ## Se sobrar tempo
 
 **Números** (`eval/results/`): mostrar o `latency.csv` e contar a história do
 p99 de 51 s — causado pela **nossa** política de retry, não pelo provedor —
 e como o prazo total por request o trouxe para um teto real de 15 s.
 
-**Testes:** `unset GEMINI_API_KEY && npm test` → 135/135 verdes. *"A suíte roda
-sem credencial porque o modelo está atrás de uma porta. Não há mock de módulo:
-os testes sobem a aplicação real com outra implementação."*
+**Testes:** `npm test` → 177/177 verdes, **sem tocar em credencial nenhuma**:
+`vitest.config.ts` fixa `LLM_PROVIDER=fake`, então nenhuma chave é lida mesmo
+com `.env` no disco. *"A suíte roda sem credencial porque o modelo está atrás de
+uma porta. Não há mock de módulo: os testes sobem a aplicação real com outra
+implementação — inclusive os e2e de HTTP, SSE e MCP, que falam pela rede de
+verdade."*
 
 **Tracing:** `OTEL_ENABLED=true` e mostrar os spans — a sobreposição entre
 `retrieve` e `callHrApi` comprovando o paralelismo em dados.
@@ -185,6 +305,22 @@ Só na geração em streaming, e por um motivo específico: o
 a API crua devolva completo. Custo por request é entregável; reportar zero não
 era opção. O LangChain continua em toda a saída estruturada, nas tools com zod e
 em todo o LangGraph.
+
+**"Por que MCP, se já tem HTTP?"**
+Porque o consumidor deixa de precisar de integração sob medida. Com HTTP, cada
+cliente escreve um adaptador para o nosso contrato; com MCP, qualquer cliente
+que fale o protocolo — Claude Desktop, IDE, outro agente — descobre a tool e os
+documentos sozinho. Não substitui o HTTP: são quatro bocas para o mesmo caso de
+uso, e o custo de ter a quarta foi um arquivo em `presentation/`.
+
+**"O endpoint MCP tem autenticação?"**
+Não, e isso está escrito como limitação, não escondido. Ele responde sobre dados
+de colaborador para quem o alcançar — o que é **paridade** com o `POST /ask`,
+que já é aberto, não um buraco novo. Continua sendo bloqueante para produção:
+resolver identidade, e a ACL de retrieval que vem junto, é o risco nº 2 do ADR.
+Hoje a mitigação parcial é que a matrícula precisa vir na pergunta, então o
+sistema não assume um colaborador padrão — mas isso é proteção contra engano,
+não contra quem age de má-fé.
 
 **"O que falta para produção?"**
 Três coisas, em ordem: tenant na chave de cache (hoje rota com dado pessoal

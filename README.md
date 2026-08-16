@@ -99,17 +99,22 @@ route=hybrid  total=2751ms  tokens=1185/109  cost=US$0.000628
 
 ### HTTP
 
+> Os exemplos usam `127.0.0.1` em vez de `localhost` de propósito: onde
+> `localhost` resolve para `::1` primeiro, o curl conecta no IPv6, o servidor
+> escuta em `0.0.0.0` e a conexão morre **sem tentar IPv4** — o TCP chegou a
+> conectar, então não há fallback. No navegador o `localhost` funciona normal.
+
 ```bash
 # JSON — resposta completa de uma vez
-curl -s -X POST localhost:3000/ask \
+curl -s -X POST 127.0.0.1:3000/ask \
   -H 'content-type: application/json' \
   -d '{"question":"Posso vender parte das minhas férias?"}' | jq
 
 # SSE — tokens conforme são gerados
-curl -N "localhost:3000/ask/stream?q=Posso%20vender%20f%C3%A9rias%3F"
+curl -N "127.0.0.1:3000/ask/stream?q=Posso%20vender%20f%C3%A9rias%3F"
 
 # Estado do serviço (mostra qual provider e modelo estão ativos)
-curl -s localhost:3000/health | jq
+curl -s 127.0.0.1:3000/health | jq
 ```
 
 ### MCP
@@ -126,7 +131,7 @@ O que é exposto:
 | Resources | `hr://policy/<arquivo>.md` | As 7 políticas do corpus, para o cliente ler o documento que uma citação aponta |
 
 ```bash
-curl -s -X POST localhost:3000/mcp \
+curl -s -X POST 127.0.0.1:3000/mcp \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
@@ -277,7 +282,7 @@ npm run lint
 ```
 
 **A suíte inteira roda sem nenhuma credencial.** Verificado com o `.env`
-removido do disco e sem `GEMINI_API_KEY` no ambiente: 135/135 passam.
+removido do disco e sem `GEMINI_API_KEY` no ambiente: 177/177 passam.
 
 Isso não é conveniência — é uma propriedade arquitetural. O modelo está atrás de
 uma porta (`ChatModelPort`), e os testes simplesmente sobem a aplicação com
