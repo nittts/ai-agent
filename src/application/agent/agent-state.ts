@@ -64,6 +64,11 @@ export const AgentState = Annotation.Root({
     default: () => [],
   }),
 
+  notes: Annotation<string[]>({
+    reducer: (current, next) => [...current, ...next],
+    default: () => [],
+  }),
+
   degraded: Annotation<boolean>({
     reducer: (current, next) => current || next,
     default: () => false,

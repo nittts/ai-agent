@@ -464,6 +464,12 @@
       }
 
       .warn-list { color: var(--warn); font-size: 12px; line-height: 1.55; }
+
+      /* Missing input is NOT an alarm: neutral ink, no amber. The system is
+         healthy — the question is simply incomplete. */
+      .note-list { color: var(--ink-2); font-size: 12px; line-height: 1.55; }
+      .note-list div { display: flex; gap: 7px; }
+      .note-list div::before { content: '›'; color: var(--accent); font-weight: 700; }
       .hint { color: var(--ink-3); font-size: 12px; line-height: 1.6; }
 
       @media (prefers-reduced-motion: reduce) {
@@ -535,8 +541,13 @@
           <div id="sources"></div>
         </section>
 
+        <section id="sec-note" hidden>
+          <h2 class="label">Faltou informar</h2>
+          <div class="note-list" id="notes"></div>
+        </section>
+
         <section id="sec-warn" hidden>
-          <h2 class="label">Avisos</h2>
+          <h2 class="label">Falhas</h2>
           <div class="warn-list" id="warnings"></div>
         </section>
       </aside>

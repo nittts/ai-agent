@@ -44,6 +44,7 @@ export function createAnswerNode(ctx: NodeContext) {
                 state.documents,
                 state.toolResults,
                 state.warnings,
+                state.notes,
               ),
               onToken,
               timeoutMs: remainingBudget(ctx.deadline, ctx.settings.llmTimeoutMs),

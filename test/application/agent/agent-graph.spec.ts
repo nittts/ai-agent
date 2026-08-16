@@ -259,4 +259,43 @@ describe('agent graph', () => {
       expect.arrayContaining(['classify', 'retrieve', 'grade', 'generateAnswer']),
     );
   });
+
+  it('a missing employee number does NOT mark the request degraded', async () => {
+    const state = await run(
+      'Meu banco de horas está em 24h; posso converter em folga segundo a política?',
+    );
+
+    expect(state.refused).toBe(false);
+
+    expect(state.degraded).toBe(false);
+    expect(state.warnings).toHaveLength(0);
+  });
+
+  it('explains the missing data as a note, in the user\'s language', async () => {
+    const state = await run(
+      'Meu banco de horas está em 24h; posso converter em folga segundo a política?',
+    );
+
+    const notes = state.notes.join(' ');
+    expect(notes).toMatch(/matrícula/i);
+
+    expect(notes).not.toMatch(/get_hours_bank/);
+  });
+
+  it('a refusal for a missing id is not degraded either', async () => {
+    const state = await run('quantas horas eu tenho no banco de horas?');
+
+    expect(state.refused).toBe(true);
+    expect(state.refusalReason).toBe('missingIdentification');
+
+    expect(state.degraded).toBe(false);
+  });
+
+  it('a REAL failure still degrades and still warns', async () => {
+    hr.failure = 'all';
+    const state = await run('Qual o meu saldo de férias? Meu id é 1042.');
+
+    expect(state.degraded).toBe(true);
+    expect(state.warnings.length).toBeGreaterThan(0);
+  });
 });

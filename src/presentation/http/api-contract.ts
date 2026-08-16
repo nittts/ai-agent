@@ -34,6 +34,8 @@ export interface AskResponse {
 
   warnings: string[];
 
+  notes: string[];
+
   refused: boolean;
   refusalReason: RefusalReason | null;
 

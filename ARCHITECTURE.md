@@ -165,13 +165,31 @@ O princípio é **degradar, não cair**. Cada nó decide explicitamente.
 | Retrieval indisponível | Responde só pela API | `degraded: true` + aviso |
 | Uma tool falha | Responde com as outras (`allSettled`) | `degraded: true` + aviso |
 | Colaborador inexistente (404) | Recusa com mensagem clara, **sem retry** | `refused: true` |
-| Sem matrícula na pergunta | **Pede** a matrícula, não inventa | `missingIdentification` |
+| Sem matrícula na pergunta | **Pede** a matrícula, não inventa | `missingIdentification`, **sem** `degraded` |
 | Geração falha | Recusa explícita, **HTTP 200** | `sourcesUnavailable` |
 | Redis fora | Serviço continua, mais lento | `cache: "MISS"` |
 | Contrato da API quebrado | Erro nomeando o campo | aviso + `degraded` |
 
 Nenhum desses casos vira HTTP 500. Uma recusa é uma **resposta válida**, e o
 usuário recebe algo acionável.
+
+### Falha não é o mesmo que entrada incompleta
+
+Duas categorias distintas, em campos distintos da resposta:
+
+| Campo | Significado | Ação do usuário |
+|---|---|---|
+| `warnings` + `degraded` | Uma dependência **falhou** | Esperar ou tentar de novo |
+| `notes` | A pergunta está **incompleta** | Fornecer o dado que falta |
+
+A separação existe porque as duas já compartilharam um canal, e o resultado foi
+um sistema saudável exibindo o badge âmbar *"respondido com uma fonte
+indisponível"* porque alguém não tinha digitado a matrícula. Isso não é um
+aviso — é desinformação, e aponta o usuário para um sistema que está intacto.
+
+Os textos também nomeiam **o dado**, não a ferramenta interna: *"não consultei
+seu saldo de banco de horas porque a matrícula não foi informada"*, e não
+`get_hours_bank: employee or ticket number not provided`.
 
 > **Uma lição aprendida durante o desenvolvimento:** a degradação graciosa torna
 > falhas *sobrevivíveis* mas também *silenciosas*. O `HR_API_BASE_URL` apontava

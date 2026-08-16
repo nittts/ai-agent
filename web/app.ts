@@ -44,9 +44,11 @@ const falls = $('falls');
 const fallsNote = $('falls-note');
 const sourcesEl = $('sources');
 const warningsEl = $('warnings');
+const notesEl = $('notes');
 const secFalls = $('sec-falls');
 const secSrc = $('sec-src');
 const secWarn = $('sec-warn');
+const secNote = $('sec-note');
 
 let busy = false;
 
@@ -207,6 +209,12 @@ function renderWarnings(warnings: string[]): void {
   warningsEl.replaceChildren();
   secWarn.hidden = warnings.length === 0;
   for (const warning of warnings) warningsEl.append(el('div', '', `• ${warning}`));
+}
+
+function renderNotes(notes: string[]): void {
+  notesEl.replaceChildren();
+  secNote.hidden = notes.length === 0;
+  for (const note of notes) notesEl.append(el('div', '', note));
 }
 
 function paintInline(parent: Node, tokens: Inline[]): void {
@@ -376,6 +384,7 @@ function ask(text: string): void {
         renderMeasurements(result);
         renderWaterfall(result.timings.perNode);
         renderWarnings(result.warnings);
+        renderNotes(result.notes);
         scroll();
 
         streamEnded = true;

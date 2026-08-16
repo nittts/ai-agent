@@ -49,6 +49,7 @@ export function buildAnswerPrompt(
   documents: SearchResult[],
   toolResults: ToolResult[],
   warnings: string[],
+  notes: string[] = [],
 ): string {
   const context = buildContext(documents, toolResults);
 
@@ -58,7 +59,13 @@ export function buildAnswerPrompt(
         'Responda com o que houver no contexto e avise explicitamente ao usuário que a informação pode estar incompleta.'
       : '';
 
-  return `CONTEXTO:\n${context}${note}\n\nPERGUNTA DO USUÁRIO:\n${question}`;
+  const missing =
+    notes.length > 0
+      ? `\n\nOBSERVAÇÃO — faltou um dado para consultar o sistema de RH: ${notes.join('; ')} ` +
+        'Responda normalmente com o que houver no contexto e, ao final, convide o usuário a informar a matrícula para você consultar os dados pessoais dele.'
+      : '';
+
+  return `CONTEXTO:\n${context}${note}${missing}\n\nPERGUNTA DO USUÁRIO:\n${question}`;
 }
 
 export const REFUSAL_MESSAGES: Record<RefusalReason, string> = {

@@ -140,9 +140,11 @@
   var fallsNote = $("falls-note");
   var sourcesEl = $("sources");
   var warningsEl = $("warnings");
+  var notesEl = $("notes");
   var secFalls = $("sec-falls");
   var secSrc = $("sec-src");
   var secWarn = $("sec-warn");
+  var secNote = $("sec-note");
   var busy = false;
   var ROUTE_LABEL = {
     kb: "pol\xEDticas",
@@ -268,6 +270,11 @@
     warningsEl.replaceChildren();
     secWarn.hidden = warnings.length === 0;
     for (const warning of warnings) warningsEl.append(el("div", "", `\u2022 ${warning}`));
+  }
+  function renderNotes(notes) {
+    notesEl.replaceChildren();
+    secNote.hidden = notes.length === 0;
+    for (const note of notes) notesEl.append(el("div", "", note));
   }
   function paintInline(parent, tokens) {
     for (const token of tokens) {
@@ -407,6 +414,7 @@
           renderMeasurements(result);
           renderWaterfall(result.timings.perNode);
           renderWarnings(result.warnings);
+          renderNotes(result.notes);
           scroll();
           streamEnded = true;
           if (!frame) finish();

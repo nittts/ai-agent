@@ -40,7 +40,10 @@ export interface AnswerResult {
   route: Route;
   sources: Source[];
   degraded: boolean;
+
   warnings: string[];
+
+  notes: string[];
   refused: boolean;
   refusalReason: RefusalReason | null;
   cache: 'HIT' | 'MISS' | 'OFF';
@@ -99,6 +102,7 @@ export class AnswerQuestionUseCase {
           ...cached,
           degraded: false,
           warnings: [],
+          notes: [],
           cache: 'HIT',
           timings: { totalMs: Date.now() - start, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
 
@@ -161,6 +165,7 @@ export class AnswerQuestionUseCase {
       sources: state.sources,
       degraded: state.degraded,
       warnings: state.warnings,
+      notes: state.notes,
       refused: state.refused,
       refusalReason: state.refusalReason,
       cache: this.cache.enabled ? 'MISS' : 'OFF',
