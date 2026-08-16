@@ -112,6 +112,49 @@ curl -N "localhost:3000/ask/stream?q=Posso%20vender%20f%C3%A9rias%3F"
 curl -s localhost:3000/health | jq
 ```
 
+### MCP
+
+O mesmo agente também é um **servidor MCP** (Model Context Protocol), em
+`POST /mcp`, no mesmo processo. Um cliente MCP — Claude Desktop, um IDE, outro
+agente — consulta o RH pelo protocolo padrão em vez de uma API própria.
+
+O que é exposto:
+
+| Primitiva | Nome | O que faz |
+|---|---|---|
+| Tool | `perguntar_rh` | O agente inteiro: RAG + tools de RH, resposta em português com fontes citadas |
+| Resources | `hr://policy/<arquivo>.md` | As 7 políticas do corpus, para o cliente ler o documento que uma citação aponta |
+
+```bash
+curl -s -X POST localhost:3000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+        "name":"perguntar_rh",
+        "arguments":{"pergunta":"Qual o meu saldo de férias? Meu id é 1042."}}}'
+```
+
+A resposta traz o texto em `content` e a evidência completa em
+`structuredContent` — rota, fontes, custo, `degraded`, `refused` —, a mesma que
+o `POST /ask` devolve:
+
+```
+rota: tool | recusou: false
+fontes: GET /employees/1042/vacation-balance
+custo: US$ 0.000342 | 1687ms
+texto: O seu saldo de férias é de 18 dias disponíveis [1].
+```
+
+Duas decisões que valem nota:
+
+- **As tools de RH cruas não são publicadas.** Um cliente MCP recebe
+  `perguntar_rh`, não `get_vacation_balance`. Republicar a API de RH entregaria
+  dado sem fundamentação; o que este sistema agrega é justamente o grounding —
+  recuperação com citação, limiar de recusa, degradação explícita e custo medido.
+- **Uma recusa não é `isError`.** `isError` significa "a tool quebrou". Uma
+  recusa fundamentada é o agente funcionando; marcá-la como erro faria clientes
+  bem-comportados tentarem de novo.
+
 ---
 
 ## Escolhas do desafio
@@ -298,7 +341,7 @@ src/
 ├── domain/          tipos e regras de negócio — zero imports de framework
 ├── application/     portas (interfaces) + grafo do agente + caso de uso
 ├── infrastructure/  adaptadores que implementam as portas + fiação do Nest
-├── presentation/    HTTP, SSE, CLI e a API mock de RH
+├── presentation/    HTTP, SSE, CLI, MCP e a API mock de RH
 └── shared/          resiliência, SSE, tracing
 
 corpus/              7 políticas de RH/TI em markdown (a base de conhecimento)

@@ -105,6 +105,8 @@ entregue.
 | `http/health.controller.ts` | Reporta a configuração **efetiva**, para o avaliador saber qual provider está ativo |
 | `http/demo.controller.ts` | Serve `eval/questions.json` ao console |
 | `cli/cli.ts` | O mesmo caso de uso, outro transporte |
+| `mcp/mcp-server.ts` | Monta o servidor MCP: a tool `perguntar_rh` e o corpus como *resources*, a partir de uma **allowlist** |
+| `mcp/mcp.plugin.ts` | Registra `/mcp` no Fastify. Servidor e transporte novos por request — sem estado de sessão |
 | `mock-hr-api/*` | A API de RH simulada + o interruptor de caos |
 
 ---

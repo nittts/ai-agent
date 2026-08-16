@@ -5,6 +5,7 @@ import { LlmModule } from './infrastructure/modules/llm.module';
 import { RetrievalModule } from './infrastructure/modules/retrieval.module';
 import { AgentModule } from './infrastructure/modules/agent.module';
 import { HttpModule } from './infrastructure/modules/http.module';
+import { McpModule } from './infrastructure/modules/mcp.module';
 import { MockHrApiModule } from './infrastructure/modules/mock-hr-api.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { MockHrApiModule } from './infrastructure/modules/mock-hr-api.module';
     RetrievalModule,
     AgentModule,
     HttpModule,
+    McpModule,
     MockHrApiModule,
   ],
 })

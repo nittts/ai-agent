@@ -9,7 +9,7 @@ assim** e **o que mudaria** sob mais carga, falhas de rede ou pressão de custo.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  PRESENTATION            HTTP · SSE · CLI · API mock de RH       │
+│  PRESENTATION       HTTP · SSE · CLI · MCP · API mock de RH       │
 └───────────────────────────────┬──────────────────────────────────┘
                                 │ chama
 ┌───────────────────────────────▼──────────────────────────────────┐
@@ -46,6 +46,35 @@ no significado do produto.
 `HrDirectoryPort` merece uma nota: ela não se chama `HttpClientPort` porque o
 agente precisa de **dados de colaborador**. Se isso chega por HTTP, gRPC ou
 banco é decisão de infraestrutura que a aplicação não deve codificar.
+
+### Quatro transportes, um caso de uso
+
+`AnswerQuestionUseCase` tem quatro adaptadores de entrada — HTTP JSON, SSE, CLI
+e MCP — e **nenhum deles conhece os outros**. Nenhuma linha de `application/`
+ou `domain/` mudou para o MCP existir: o adaptador chama `execute()` e traduz o
+resultado para o formato do protocolo.
+
+Isso é a evidência prática de que a hexagonal está fazendo trabalho, e não
+apenas nomeando pastas. O teste é direto: acrescentar uma boca nova custou um
+arquivo em `presentation/` e um módulo de fiação.
+
+O MCP expõe **uma** tool (`perguntar_rh`, o agente inteiro) e as 7 políticas
+como *resources*. Deliberadamente **não** expõe as tools de RH cruas
+(`get_vacation_balance` e afins): republicá-las entregaria dado sem
+fundamentação, quando o que este sistema agrega é exatamente a camada de
+grounding — recuperação com citação, limiar de recusa, degradação explícita e
+custo medido. Um cliente que chama `perguntar_rh` herda tudo isso.
+
+Duas notas de protocolo que são decisões, não detalhes:
+
+- **Recusa não é `isError`.** `isError` significa "a tool quebrou". Uma recusa
+  fundamentada é o agente funcionando corretamente; marcá-la como erro faria
+  clientes bem-comportados tentarem de novo ou reportarem falha ao usuário. O
+  motivo viaja em `structuredContent.refusalReason`.
+- **Transporte sem sessão.** Um `McpServer` e um transporte novos por request,
+  sem `sessionId`. Sem estado de sessão no processo, qualquer réplica atende
+  qualquer request — a mesma propriedade que já vale para `POST /ask` e que o
+  ADR usa como base para escalar horizontalmente.
 
 ### Onde o LangGraph mora, e por quê
 
@@ -372,6 +401,7 @@ Cada resposta reporta tokens de entrada, de saída e custo em dólares. Medido:
 | Alucinação | Limiar de fundamentação + recusa determinística + citação obrigatória |
 | Custo descontrolado | Limite de tamanho da pergunta, prazo por request, contagem de tokens por resposta |
 | DoS pelo interruptor de caos | Atrás de `CHAOS_ENABLED`, desligado em produção |
+| Path traversal nos *resources* MCP | URIs vêm do cliente e viram leitura de arquivo. O corpus é lido uma vez e vira **allowlist**: só nomes listados são resolvíveis, o que torna `hr://policy/../../.env` impossível em vez de filtrado |
 
 ---
 
@@ -392,6 +422,11 @@ não é confiável.
 5. **Uma tool por hop.** A seleção é feita pelo classificador em um hop fixo;
    perguntas que exigissem descoberta em etapas não são atendidas. Foi uma
    troca consciente por previsibilidade de cauda.
-6. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
+6. **O endpoint MCP não tem autenticação.** Ele responde perguntas sobre dados
+   de colaborador para quem o alcançar. Isso é **paridade** com o `POST /ask`,
+   que já é aberto — não um buraco novo —, mas continua sendo bloqueante para
+   produção. Resolver identidade (e a ACL de recuperação que vem junto) é o
+   risco nº 2 do ADR.
+7. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
    seria `BatchSpanProcessor`; aqui é aceitável porque o destino é o console e o
    tracing fica desligado durante os benchmarks.

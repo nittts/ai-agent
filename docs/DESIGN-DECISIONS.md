@@ -626,6 +626,109 @@ dois minutos da call.
 
 ---
 
+## MCP
+
+### D51. O agente é publicado como MCP, não as tools de RH
+
+**Por quê:** a alternativa óbvia era expor `get_vacation_balance`,
+`get_benefits` e `get_hours_bank` como tools MCP — um proxy fino sobre a API de
+RH. Foi descartada: isso entrega **dado sem fundamentação** e transfere para o
+cliente toda a responsabilidade que este projeto assume — recuperar a política
+aplicável, citar a fonte, recusar quando não há base, degradar de forma
+explícita e contabilizar custo.
+
+Publicando `perguntar_rh`, um cliente MCP herda o agente inteiro. O valor do
+sistema está na camada de grounding, não no acesso ao dado; expor o acesso cru
+publicaria justamente a parte que não é nossa.
+
+**Descartado também:** publicar as duas coisas. Um cliente que enxerga os dois
+caminhos vai escolher o mais barato, e o mais barato é o sem grounding.
+
+---
+
+### D52. Uma recusa retorna normalmente; `isError` fica para falha real
+
+**Por quê:** `isError` no MCP significa "a execução da tool falhou". Uma recusa
+fundamentada — pergunta fora de escopo, contexto insuficiente — é o agente
+**funcionando como projetado**. Marcá-la como erro faria clientes
+bem-comportados tentarem de novo (gastando cota para receber a mesma recusa) ou
+exibirem uma falha de sistema ao usuário quando declinar era a resposta certa.
+
+O motivo viaja em `structuredContent.refusalReason`, onde o cliente pode agir
+sobre ele. `isError` fica reservado ao que é de fato entrada inválida — uma
+pergunta vazia. É a mesma distinção que o HTTP faz ao devolver **200** numa
+recusa (D14 e D18): recusar é uma resposta, não um defeito.
+
+---
+
+### D53. Transporte sem sessão, um servidor por request
+
+**Por quê:** `StreamableHTTPServerTransport` com `sessionIdGenerator: undefined`.
+Sem estado de sessão no processo, qualquer réplica atende qualquer request — a
+mesma propriedade que já vale para `POST /ask` e sobre a qual o ADR apoia o
+escalonamento horizontal.
+
+O custo é instanciar `McpServer` e transporte por chamada. Foi **medido**, não
+suposto: p50 0,48 ms / p95 1,07 ms por request, contra um p50 de request de
+~1,9 s — três ordens de grandeza abaixo.
+
+A primeira versão custava p50 1,02 ms porque listava o corpus a cada chamada. O
+`readdir` subiu para o registro da rota: o corpus é fixo no boot, e I/O
+bloqueante no event loop é exatamente o custo que deixa de ser irrelevante sob
+concorrência.
+
+**Descartado:** modo com sessão. Ganharia notificações do servidor para o
+cliente, que este agente não emite, em troca de afinidade de sessão — exigindo
+sticky sessions ou um store compartilhado no primeiro dia de duas réplicas.
+
+---
+
+### D54. Os *resources* saem de uma allowlist, não de um filtro de caminho
+
+**Por quê:** URIs de resource chegam do cliente e terminam em leitura de
+arquivo. Um filtro (`if (uri.includes('..')) reject`) é uma lista de proibições
+que alguém precisa manter correta para sempre, contra normalizações,
+codificação percentual e links simbólicos.
+
+O corpus é lido uma vez no boot e vira um `Map<uri, caminhoAbsoluto>`. Só o que
+foi listado é resolvível — `hr://policy/../../.env` não é *rejeitado*, ele
+simplesmente **não existe**. A diferença entre garantia e filtro. Coberto por
+teste com três variações de traversal, que também assertam que a resposta não
+contém `GEMINI_API_KEY`.
+
+---
+
+### D55. `zod/v4` apenas no adaptador MCP
+
+**Por quê:** o SDK do MCP declara seus tipos de schema contra `zod/v4`; o resto
+do projeto roda zod v3, que é o que o LangChain espera. Misturar entrypoints é
+normalmente um cheiro, então ficou **contido em um arquivo e declarado em
+comentário**.
+
+A alternativa era migrar o projeto inteiro para zod v4 para satisfazer um
+adaptador — colocando em risco todo schema de tool do LangChain e a validação
+de env em troca de servir um transporte. O zod 3.25 publica a API v4 nesse
+subpath exatamente para permitir a convivência.
+
+---
+
+### D56. O MCP é registrado no Fastify, não em um controller do Nest
+
+**Por quê:** o SDK assume o ciclo de vida cru de request/response —
+`reply.hijack()` e escrita direta no socket. Enfiar isso em um controller do
+Nest significaria lutar contra o pipeline de serialização do framework para
+depois contorná-lo.
+
+Registrar como rota Fastify em `configureApp()` põe a fronteira no lugar certo:
+o MCP é um **transporte**, e transporte é assunto do servidor HTTP. O acesso ao
+caso de uso vem pelo container do Nest via o provider `MCP_SETUP`, então a
+fiação continua sendo uma só.
+
+A ordem importa e está comentada no código: o handler de estáticos reivindica o
+prefixo `/`, então `/mcp` precisa ser declarado **antes** dele.
+
+---
+
 ## Decisões que eu reverteria ou revisitaria
 
 Escrito porque um documento que só lista acertos não é confiável.
