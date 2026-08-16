@@ -6,7 +6,6 @@ dist
 *.log
 coverage
 eval/results
-eval/index-snapshot.json
 docs
 *.pdf
 README.md

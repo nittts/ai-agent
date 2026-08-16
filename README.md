@@ -36,10 +36,12 @@ custou** — e o console de demonstração mostra isso ao lado do texto.
 
 ```bash
 cp .env.example .env          # coloque sua GEMINI_API_KEY
-npm install
-npm run ingest                # gera o índice vetorial (~4s, ~50 chunks)
 docker compose up --build
 ```
+
+O índice vetorial (`eval/index-snapshot.json`) é versionado, então não há passo
+de ingestão para rodar o projeto. Só é preciso regerá-lo — `npm run ingest` —
+quando o corpus mudar.
 
 Abra **http://localhost:3000** — o console já está lá. Não há build de
 front-end nem segundo processo.
@@ -49,17 +51,47 @@ front-end nem segundo processo.
 ```bash
 cp .env.example .env          # coloque sua GEMINI_API_KEY
 npm install
-npm run ingest
 npm run dev                   # http://localhost:3000
 ```
 
 O Redis é **opcional**: sem ele o serviço sobe, funciona e reporta
 `cache: "OFF"` nas respostas.
 
+### Deploy no Railway
+
+O repositório traz `Dockerfile` e `railway.json`; o Railway detecta os dois
+sozinho. Crie o serviço a partir do GitHub e defina as variáveis:
+
+| Variável | Valor | Obrigatória |
+|---|---|---|
+| `GEMINI_API_KEY` | sua chave | **sim** |
+| `REDIS_URL` | fornecida pelo plugin Redis do Railway | não — sem ela o cache fica `OFF` |
+| `CHAOS_ENABLED` | `true` para poder demonstrar degradação ao vivo | não |
+| `LOG_LEVEL` | `info` | não |
+
+**Não defina `PORT` nem `HR_API_BASE_URL`.** O Railway injeta a `PORT`, e o
+entrypoint deriva a URL da API de RH a partir dela.
+
+Três detalhes que fazem esse deploy funcionar, e que não são óbvios:
+
+- **O índice vetorial vai dentro da imagem.** `eval/index-snapshot.json` é
+  versionado e copiado no build — mesma razão pela qual o bundle do console é
+  commitado: o ambiente de deploy não roda `npm run ingest`. Quando o corpus
+  mudar, rode a ingestão e faça commit do snapshot novo; o `corpusVersion` na
+  chave de cache garante que nada velho seja servido.
+- **Sem índice, o container morre em vez de subir.** O app sozinho apenas avisa
+  e segue com base de conhecimento vazia — o que é razoável em desenvolvimento e
+  péssimo em produção, porque o serviço fica **verde recusando tudo**. O
+  entrypoint prefere o crash-loop visível.
+- **`HR_API_BASE_URL` aponta para o próprio processo.** A API de RH é simulada
+  dentro da aplicação, então ela precisa acompanhar a porta que o Railway
+  sorteou. Fixá-la em `3000` faria toda pergunta de dado pessoal degradar — sem
+  erro, só uma tarja âmbar que ninguém entenderia.
+
 ### Sem credencial nenhuma
 
 ```bash
-LLM_PROVIDER=fake npm run ingest
+LLM_PROVIDER=fake npm run ingest   # o índice versionado é do modelo real
 LLM_PROVIDER=fake npm run dev
 ```
 
