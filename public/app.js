@@ -110,7 +110,6 @@
   // src/shared/sse/sse-reader.ts
   var SseReader = class {
     buffer = "";
-
     feed(chunk) {
       this.buffer += chunk.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
       const payloads = [];
@@ -123,7 +122,6 @@
       }
       return payloads;
     }
-
     remainder() {
       return this.buffer;
     }
@@ -232,7 +230,6 @@
       row("tokens", `${result.cost.inputTokens} / ${result.cost.outputTokens}`),
       row(
         "custo",
-
         result.cost.usd === 0 ? "US$ 0" : `US$ ${result.cost.usd.toFixed(6)}`,
         result.cost.usd === 0 ? "t-ok" : ""
       )
@@ -396,7 +393,7 @@
     try {
       sessionStorage.setItem(HISTORY_KEY, JSON.stringify(turns.slice(-MAX_HISTORY_TURNS)));
     } catch {
-      void 0;
+      return;
     }
   }
   function remember(question, answer) {
@@ -571,7 +568,7 @@
       }
       chaosLabel.hidden = !chaosAvailable;
     } catch {
-      void 0;
+      return;
     }
   }
   async function toggleChaos(on) {

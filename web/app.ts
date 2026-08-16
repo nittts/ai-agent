@@ -328,7 +328,7 @@ function saveHistory(turns: ConversationTurn[]): void {
   try {
     sessionStorage.setItem(HISTORY_KEY, JSON.stringify(turns.slice(-MAX_HISTORY_TURNS)));
   } catch {
-    void 0;
+    return;
   }
 }
 
@@ -552,7 +552,7 @@ async function loadSuggestions(): Promise<void> {
 
     chaosLabel.hidden = !chaosAvailable;
   } catch {
-    void 0;
+    return;
   }
 }
 

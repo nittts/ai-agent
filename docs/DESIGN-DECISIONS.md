@@ -921,6 +921,116 @@ stream do Gemini — incluindo a normalização de CRLF que um bug muito caro pa
 
 ---
 
+## Detalhes que custaram caro para descobrir
+
+### D66. `setNoDelay` ficou, mas a hipótese que o motivou estava errada
+
+**O relato:** *"a resposta chega toda de uma vez em vez de letra a letra"*.
+
+**A hipótese:** o algoritmo de Nagle estaria juntando as escritas de token no
+socket. Adicionei `reply.raw.socket?.setNoDelay(true)`.
+
+**O teste que a derrubou:** um servidor emitindo eventos a cada 100 ms entrega
+a 100 ms de distância **com ou sem** a chamada, em loopback — medi 93, 101, 100,
+101 ms nos dois casos. O ACK volta imediatamente, então Nagle não tinha o que
+segurar.
+
+**A causa real:** o Gemini manda ~80 caracteres por chunk. A resposta chega em
+um punhado de blocos, e isso é o provedor, não a rede.
+
+**Por que a linha ficou:** o raciocínio continua valendo numa rede **real**,
+onde o RTT não é ~0 e o Nagle de fato agrupa escritas pequenas. Custa nada e
+remove uma classe de problema que não dá para reproduzir localmente. O que mudou
+foi o comentário — passou a contar a história certa em vez da hipótese.
+
+A lição é a que interessa: **eu me provei errado com um teste controlado em vez
+de deixar a correção plausível de pé.** Uma correção que "parece ter funcionado"
+sem causa confirmada é dívida disfarçada de conserto.
+
+---
+
+### D67. `min-height: 0`, ou por que `overflow: auto` não fazia nada
+
+**O sintoma:** o painel de evidência rolava junto com a conversa, então ler uma
+resposta longa tirava da tela justamente a evidência daquela resposta.
+
+**A causa:** item de flex ou de grid nasce com `min-height: auto`, que significa
+*"nunca encolha abaixo do seu conteúdo"*. Sob essa regra o `overflow-y: auto`
+que já existia nos dois painéis era **decorativo** — eles cresciam até caber
+tudo, estouravam a altura do container e quem rolava acabava sendo o documento.
+
+Zerar o mínimo é o que **autoriza** o painel a ficar menor que o conteúdo, e só
+então a barra de rolagem dele existe. O `body` virou moldura fixa da viewport
+(`100dvh` + `overflow: hidden`).
+
+No celular a lógica se inverte de propósito: uma coluna só, e aí a página
+inteira rolando é o certo — prender a viewport deixaria o painel inalcançável.
+
+---
+
+### D68. `degraded` é um latch, não um valor
+
+**Por quê:** o reducer é `(current, next) => current || next`. Uma vez ligado,
+não desliga.
+
+Na rota `hybrid` dois nós escrevem no estado no mesmo superstep. Com um reducer
+de sobrescrita, um nó que teve sucesso apagaria a degradação que o outro acabou
+de registrar — e a resposta sairia sem tarja, afirmando estar íntegra enquanto
+uma das fontes falhou. É o modo de falha mais perigoso do sistema: **parecer
+saudável**.
+
+Mesma família dos reducers de append em `sources` e `toolResults`, e pela mesma
+razão: escrita concorrente exige dizer como combinar, não como substituir.
+
+---
+
+### D69. O `connect()` do Redis precisa ser aguardado
+
+**O sintoma:** os primeiros requests depois do boot **sempre** davam miss, mesmo
+repetindo a mesma pergunta.
+
+**A causa:** o cliente era construído e o `connect()` disparado sem `await`.
+Toda leitura que chegasse antes da conexão estabelecer falhava em silêncio e era
+tratada como miss — porque cache indisponível **deve** degradar para miss, nunca
+quebrar o request. O acerto do design escondeu o defeito.
+
+**A correção:** uma promise `ready` guardada na construção e aguardada em `get`,
+`set` e `clear`.
+
+Combina com `enableOfflineQueue: false`: sem isso, comandos enfileiram enquanto o
+Redis está fora e disparam todos juntos quando ele volta, transformando uma queda
+curta numa avalanche.
+
+---
+
+### D70. O console nunca usa `innerHTML`
+
+**Por quê:** o texto da resposta é produzido pelo modelo e derivado do corpus —
+que é editável por gente de RH, fora de engenharia. Transformar isso em HTML
+faria de uma resposta um vetor de injeção na página.
+
+Por isso o parser de markdown devolve uma **estrutura de dados**, nunca HTML, e
+um pintor separado constrói nós da DOM com `document.createElement` e
+`textContent`. Injeção de script fica impossível **por construção**, não por
+sanitização — a diferença entre uma garantia e um filtro que alguém precisa
+manter correto para sempre.
+
+É a mesma tese da allowlist dos resources do MCP.
+
+---
+
+### D71. O limite de 2 000 caracteres na pergunta é controle de custo
+
+**Por quê:** não é frescura de validação. O texto da pergunta entra no prompt de
+classificação **e** no prompt de resposta, então cada caractere é pago duas
+vezes por request. Sem teto, um cliente escolhe sozinho quanto vamos gastar.
+
+Foi também o que quebrou a primeira medição do custo de histórico: o campo de
+histórico precisou ser separado da pergunta exatamente porque somá-los estourava
+esse teto.
+
+---
+
 ## Decisões que eu reverteria ou revisitaria
 
 Escrito porque um documento que só lista acertos não é confiável.
