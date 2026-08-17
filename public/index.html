@@ -128,8 +128,10 @@
         display: flex;
         align-items: center;
         gap: 14px;
-        height: 60px;
+        min-height: 60px;
         flex: 0 0 auto;
+        flex-wrap: wrap;
+        row-gap: 8px;
         padding: 0 22px;
         background: var(--panel);
         border-bottom: 1px solid var(--line);
@@ -430,13 +432,94 @@
       :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
       /* ---------------- evidence panel ---------------- */
+      /*
+        O painel e uma coluna: barra de titulo fixa + corpo que rola.
+        O corpo e quem tem overflow, nao o painel — assim a barra permanece
+        clicavel com a evidencia rolada ate o fim.
+      */
       .evidence {
         background: var(--panel);
         border-left: 1px solid var(--line);
-        padding: 22px 20px 32px;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .evidence-body {
+        flex: 1;
         min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
+        padding: 18px 20px 32px;
+      }
+
+      .panel-toggle {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        padding: 13px 16px;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink-2);
+        font: 600 10.5px/1 var(--mono);
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: color 120ms, background 120ms;
+      }
+      .panel-toggle:hover { color: var(--accent-ink); background: var(--panel-alt); }
+
+      .chev {
+        width: 15px; height: 15px;
+        flex: 0 0 auto;
+        fill: none; stroke: currentColor; stroke-width: 2.2;
+        stroke-linecap: round; stroke-linejoin: round;
+        /*
+          Aponta para onde o clique LEVA, e isso muda com o layout: em coluna
+          unica o painel abre para baixo, no desktop ele abre para a esquerda.
+          Quatro estados, nao dois.
+        */
+        transform: rotate(-90deg);
+        transition: transform 160ms ease;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .chev { transition: none; }
+      }
+
+      /* ---- painel colapsado ---- */
+      .stage[data-panel='collapsed'] .evidence-body { display: none; }
+      .stage[data-panel='collapsed'] .chev { transform: rotate(90deg); }
+
+      /*
+        No desktop o painel colapsa para uma canaleta vertical: a grade encolhe a
+        coluna e o rotulo gira. Preferi isso a esconder o painel por completo —
+        um botao flutuante para trazê-lo de volta seria mais um elemento na tela,
+        e a canaleta ja diz onde ele esta.
+      */
+      @media (min-width: 981px) {
+        .stage[data-panel='collapsed'] { grid-template-columns: minmax(0, 1fr) 44px; }
+        .stage[data-panel='collapsed'] .panel-toggle {
+          /*
+            column-reverse inverte o eixo principal, entao main-start fica
+            EMBAIXO: `flex-end` e o que empurra o grupo para o topo, onde ele e
+            encontrado. Com flex-start o rotulo ia para o rodape da coluna.
+          */
+          flex-direction: column-reverse;
+          justify-content: flex-end;
+          height: 100%;
+          padding: 14px 0;
+          border-bottom: none;
+        }
+        .stage[data-panel='collapsed'] .panel-toggle-text {
+          writing-mode: vertical-rl;
+          letter-spacing: 0.14em;
+        }
+        .chev { transform: rotate(0deg); }
+        .stage[data-panel='collapsed'] .chev { transform: rotate(180deg); }
       }
 
       /*
@@ -451,8 +534,37 @@
         .evidence {
           border-left: none;
           border-top: 1px solid var(--line);
-          overflow: visible;
         }
+        /* Em coluna unica a pagina rola, entao o corpo do painel nao deve
+           competir com ela por uma segunda barra de rolagem. */
+        .evidence-body { overflow: visible; flex: none; }
+        .panel-toggle { position: sticky; top: 0; background: var(--panel); z-index: 2; }
+      }
+
+      /* ---- tela estreita ---- */
+      @media (max-width: 640px) {
+        /*
+          O header tinha altura fixa de 60px e as chips de diagnostico
+          embrulhavam para dentro dela, transbordando por baixo — e a conversa,
+          que vem depois no DOM, pintava por cima. Daí a impressao de sobreposicao.
+          Agora ele cresce, e o que da para encurtar encurta.
+        */
+        header { padding: 10px 14px; gap: 10px; }
+        .brand { font-size: 14px; }
+        .brand span, .wide-only { display: none; }
+        .fact { font-size: 10.5px; padding: 4px 8px; }
+        /* O estado do cache aparece por resposta no painel; no header e redundante. */
+        .fact:nth-of-type(2) { display: none; }
+        .switch { font-size: 11px; padding: 6px 9px; }
+        .ghost { font-size: 11px; padding: 6px 10px; }
+
+        .thread { padding: 18px 14px 6px; }
+        .thread-inner { gap: 18px; }
+        .composer { padding: 10px 14px 14px; }
+        .composer input { padding: 11px 15px; font-size: 14px; }
+        .composer button { width: 42px; height: 42px; }
+        .evidence-body { padding: 16px 14px 26px; }
+        .q, .a { max-width: 100%; }
       }
 
       .evidence section + section {
@@ -570,17 +682,19 @@
       <div class="facts" id="facts"></div>
       <label class="switch" id="chaos-label" data-on="false" hidden>
         <input type="checkbox" id="chaos" />
-        Derrubar API de RH
+        Derrubar<span class="wide-only"> API de</span> RH
       </label>
       <!--
         A conversa sobrevive ao reload (sessionStorage), então é preciso um jeito
         explícito de zerá-la. Sem isso, numa demo o contexto de uma pergunta
         vaza para a próxima e o agente parece responder a coisa errada.
       -->
-      <button type="button" class="ghost" id="reset" hidden>Nova conversa</button>
+      <button type="button" class="ghost" id="reset" hidden>
+        Nova<span class="wide-only"> conversa</span>
+      </button>
     </header>
 
-    <main class="stage">
+    <main class="stage" id="stage" data-panel="expanded">
       <section class="chat">
         <div class="thread" id="thread">
           <div class="thread-inner" id="thread-inner">
@@ -612,41 +726,54 @@
       </section>
 
       <aside class="evidence" id="evidence">
-        <section id="sec-measure">
-          <h2 class="label">Medição</h2>
-          <dl id="measure"></dl>
-        </section>
+        <button
+          type="button"
+          class="panel-toggle"
+          id="panel-toggle"
+          aria-controls="evidence-body"
+          aria-expanded="true"
+        >
+          <span class="panel-toggle-text">Evidência</span>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+        </button>
 
-        <!--
-          Aparece SÓ quando o agente reinterpretou a pergunta. Numa pergunta
-          isolada não há nada a mostrar, e um painel que repete a pergunta de
-          volta em toda resposta ensina o leitor a ignorar o painel.
-        -->
-        <section id="sec-interp" hidden>
-          <h2 class="label">Entendi sua pergunta como</h2>
-          <p class="interp" id="interp"></p>
-        </section>
+        <div class="evidence-body" id="evidence-body">
+          <section id="sec-measure">
+            <h2 class="label">Medição</h2>
+            <dl id="measure"></dl>
+          </section>
 
-        <section id="sec-falls" hidden>
-          <h2 class="label">Tempo por etapa do grafo</h2>
-          <div class="falls" id="falls"></div>
-          <p class="note" id="falls-note"></p>
-        </section>
+          <!--
+            Aparece SÓ quando o agente reinterpretou a pergunta. Numa pergunta
+            isolada não há nada a mostrar, e um painel que repete a pergunta de
+            volta em toda resposta ensina o leitor a ignorar o painel.
+          -->
+          <section id="sec-interp" hidden>
+            <h2 class="label">Entendi sua pergunta como</h2>
+            <p class="interp" id="interp"></p>
+          </section>
 
-        <section id="sec-src" hidden>
-          <h2 class="label">Fontes consultadas</h2>
-          <div id="sources"></div>
-        </section>
+          <section id="sec-falls" hidden>
+            <h2 class="label">Tempo por etapa do grafo</h2>
+            <div class="falls" id="falls"></div>
+            <p class="note" id="falls-note"></p>
+          </section>
 
-        <section id="sec-note" hidden>
-          <h2 class="label">Faltou informar</h2>
-          <div class="note-list" id="notes"></div>
-        </section>
+          <section id="sec-src" hidden>
+            <h2 class="label">Fontes consultadas</h2>
+            <div id="sources"></div>
+          </section>
 
-        <section id="sec-warn" hidden>
-          <h2 class="label">Falhas</h2>
-          <div class="warn-list" id="warnings"></div>
-        </section>
+          <section id="sec-note" hidden>
+            <h2 class="label">Faltou informar</h2>
+            <div class="note-list" id="notes"></div>
+          </section>
+
+          <section id="sec-warn" hidden>
+            <h2 class="label">Falhas</h2>
+            <div class="warn-list" id="warnings"></div>
+          </section>
+        </div>
       </aside>
     </main>
 

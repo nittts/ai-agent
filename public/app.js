@@ -171,6 +171,8 @@
   var secInterp = $("sec-interp");
   var interpEl = $("interp");
   var resetButton = $("reset");
+  var stage = $("stage");
+  var panelToggle = $("panel-toggle");
   var busy = false;
   var ROUTE_LABEL = {
     kb: "pol\xEDticas",
@@ -379,6 +381,33 @@
   var scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
   var REVEAL_FRAMES = 12;
   var prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  var PANEL_KEY = "assistente-rh:painel";
+  var NARROW_WIDTH = 980;
+  function panelDefault() {
+    return window.innerWidth <= NARROW_WIDTH ? "collapsed" : "expanded";
+  }
+  function applyPanel(state) {
+    stage.dataset.panel = state;
+    panelToggle.setAttribute("aria-expanded", String(state === "expanded"));
+    panelToggle.title = state === "expanded" ? "Recolher a evid\xEAncia" : "Mostrar a evid\xEAncia";
+  }
+  function readPanel() {
+    try {
+      const saved = sessionStorage.getItem(PANEL_KEY);
+      return saved === "expanded" || saved === "collapsed" ? saved : panelDefault();
+    } catch {
+      return panelDefault();
+    }
+  }
+  function togglePanel() {
+    const next = stage.dataset.panel === "expanded" ? "collapsed" : "expanded";
+    applyPanel(next);
+    try {
+      sessionStorage.setItem(PANEL_KEY, next);
+    } catch {
+      return;
+    }
+  }
   var HISTORY_KEY = "assistente-rh:conversa";
   function loadHistory() {
     try {
@@ -590,11 +619,13 @@
   });
   chaos.addEventListener("change", () => void toggleChaos(chaos.checked));
   resetButton.addEventListener("click", resetConversation);
+  panelToggle.addEventListener("click", togglePanel);
   void (async () => {
     resetButton.hidden = loadHistory().length === 0;
+    applyPanel(readPanel());
     const health = await loadHealth();
     renderIdleEvidence(health);
     await loadSuggestions();
-    input.focus();
+    if (window.innerWidth > NARROW_WIDTH) input.focus();
   })();
 })();

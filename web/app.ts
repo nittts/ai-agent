@@ -54,6 +54,8 @@ const secNote = $('sec-note');
 const secInterp = $('sec-interp');
 const interpEl = $('interp');
 const resetButton = $('reset') as HTMLButtonElement;
+const stage = $('stage');
+const panelToggle = $('panel-toggle') as HTMLButtonElement;
 
 let busy = false;
 
@@ -311,6 +313,38 @@ const REVEAL_FRAMES = 12;
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+const PANEL_KEY = 'assistente-rh:painel';
+const NARROW_WIDTH = 980;
+
+function panelDefault(): 'expanded' | 'collapsed' {
+  return window.innerWidth <= NARROW_WIDTH ? 'collapsed' : 'expanded';
+}
+
+function applyPanel(state: 'expanded' | 'collapsed'): void {
+  stage.dataset.panel = state;
+  panelToggle.setAttribute('aria-expanded', String(state === 'expanded'));
+  panelToggle.title = state === 'expanded' ? 'Recolher a evidência' : 'Mostrar a evidência';
+}
+
+function readPanel(): 'expanded' | 'collapsed' {
+  try {
+    const saved = sessionStorage.getItem(PANEL_KEY);
+    return saved === 'expanded' || saved === 'collapsed' ? saved : panelDefault();
+  } catch {
+    return panelDefault();
+  }
+}
+
+function togglePanel(): void {
+  const next = stage.dataset.panel === 'expanded' ? 'collapsed' : 'expanded';
+  applyPanel(next);
+  try {
+    sessionStorage.setItem(PANEL_KEY, next);
+  } catch {
+    return;
+  }
+}
 
 const HISTORY_KEY = 'assistente-rh:conversa';
 
@@ -580,11 +614,23 @@ chaos.addEventListener('change', () => void toggleChaos(chaos.checked));
 
 resetButton.addEventListener('click', resetConversation);
 
+panelToggle.addEventListener('click', togglePanel);
+
 void (async () => {
   resetButton.hidden = loadHistory().length === 0;
+  applyPanel(readPanel());
 
   const health = await loadHealth();
   renderIdleEvidence(health);
   await loadSuggestions();
-  input.focus();
+
+  /*
+   * Autofoco so em tela larga.
+   *
+   * Em coluna unica a pagina rola, e focar o campo no boot a rolava ate o
+   * compositor: o header e todo o estado vazio — que e justamente o convite
+   * para a primeira pergunta — saiam da tela antes de serem lidos. Num aparelho
+   * de verdade ainda abre o teclado sem ninguem pedir.
+   */
+  if (window.innerWidth > NARROW_WIDTH) input.focus();
 })();
