@@ -1,5 +1,5 @@
-Retrieval evaluation — model=gemini-embedding-001 corpusVersion=02fbb3bb10f2
-generated at 2026-08-14T21:25:21.765Z
+Retrieval evaluation — model=gemini-embedding-001 corpusVersion=56ca68fdb394
+generated at 2026-08-17T21:37:59.455Z
 
 metric         value
 --------------------
@@ -13,5 +13,5 @@ by category:
   kbMulti        n= 4  recall@3=1.000
   hybrid         n= 4  recall@3=1.000
 
-n=14 labelled questions over 51 chunks. Small, well-separated corpus:
+n=14 labelled questions over 52 chunks. Small, well-separated corpus:
 treat a perfect score as a sanity floor, not as evidence of robustness at scale.

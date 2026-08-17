@@ -112,6 +112,12 @@ Para consultar dados pessoais, inclua a sua **matrícula** na pergunta — por e
 
 Respondo apenas sobre esses assuntos, e sempre citando de onde tirei a informação. Quando não tenho base para responder, eu digo isso em vez de chutar.`;
 
+export const META_GREETING = 'Olá! Sou o assistente interno de RH e TI desta empresa.';
+
+export const META_ANSWER_SHORT = `Continuo por aqui — RH e TI: férias, benefícios, reembolso, acesso e TI, home-office, ponto e jornada, desligamento, além dos seus dados nesses sistemas.
+
+Me diga o que você precisa saber. Para dados pessoais, inclua a sua matrícula.`;
+
 export const REFUSAL_MESSAGES: Record<RefusalReason, string> = {
   outOfScope:
     'Não consigo ajudar com esse assunto. Sou o assistente interno de RH e TI, e respondo apenas sobre políticas da empresa (férias, benefícios, reembolso, acesso e TI, home-office, ponto e jornada, desligamento) e sobre seus dados nesses sistemas.',

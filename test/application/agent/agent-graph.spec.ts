@@ -285,6 +285,27 @@ describe('agent graph', () => {
     expect(state.answer.toLowerCase()).toContain('matrícula');
   });
 
+  /**
+   * Repeating a nine-line introduction verbatim is what makes an assistant look
+   * unintelligent — more than being wrong does, because being wrong at least
+   * looks like it tried. The second time it is asked who it is, it should
+   * recognise that it already said so.
+   */
+  it('meta route: does not repeat the full introduction twice in a row', async () => {
+    const primeira = await run('quem é você?');
+    const segunda = await runWithHistory('e o que você pode fazer?', [
+      { role: 'user', content: 'quem é você?' },
+      { role: 'assistant', content: primeira.answer },
+    ]);
+
+    expect(segunda.route).toBe('meta');
+    expect(segunda.refused).toBe(false);
+    expect(segunda.answer).not.toBe(primeira.answer);
+    expect(segunda.answer.length).toBeLessThan(primeira.answer.length);
+    // A versão curta ainda precisa dizer o que fazer em seguida.
+    expect(segunda.answer.toLowerCase()).toContain('matrícula');
+  });
+
   it('meta route: ZERO model calls beyond classification — deterministic text', async () => {
     await run('o que você pode fazer?');
 

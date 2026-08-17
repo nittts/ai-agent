@@ -364,7 +364,7 @@ otimização marginal: é o mecanismo de escala.
 | recall@5 | 1.000 |
 | MRR | 1.000 |
 
-14 perguntas com gabarito sobre 51 chunks. **Corpus pequeno e bem separado:
+14 perguntas com gabarito sobre 52 chunks. **Corpus pequeno e bem separado:
 trate um resultado perfeito como piso de sanidade, não como prova de robustez
 em escala.** O valor real desta medição é diagnóstico — quando uma resposta sai
 errada, ela diz se o problema foi "não recuperou o contexto certo" ou "recuperou

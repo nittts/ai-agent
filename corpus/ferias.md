@@ -24,6 +24,11 @@ O limite é sempre calculado sobre o direito do período aquisitivo, e não sobr
 ainda disponível. Um colaborador que já usufruiu parte das férias e possui saldo de 18
 dias continua limitado a vender no máximo 10 dias.
 
+Os dias vendidos são descontados do saldo disponível para descanso. O limite de venda e o
+saldo são grandezas distintas: o limite se calcula sobre o direito do período aquisitivo,
+enquanto o saldo é o que resta para usufruir. No exemplo acima, o colaborador com saldo de
+18 dias que vende os 10 dias permitidos fica com 8 dias de descanso.
+
 A solicitação de abono pecuniário deve ser feita até 15 dias antes do término do período
 aquisitivo. Pedidos fora desse prazo são recusados pelo RH.
 
