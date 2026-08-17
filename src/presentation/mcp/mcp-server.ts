@@ -17,6 +17,7 @@ const answerShape = {
   degraded: z.boolean(),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
+  unverified: z.array(z.string()),
   sources: z.array(
     z.object({
       kind: z.string(),
@@ -105,6 +106,7 @@ export function buildMcpServer({ answerQuestion, policies }: McpServerOptions): 
         degraded: result.degraded,
         warnings: result.warnings,
         notes: result.notes,
+        unverified: result.unverified,
         sources: result.sources.map((source) =>
           source.kind === 'document'
             ? {

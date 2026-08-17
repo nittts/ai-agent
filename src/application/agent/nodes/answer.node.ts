@@ -1,5 +1,6 @@
 import type { AgentStateType } from '../agent-state';
-import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt, REFUSAL_MESSAGES } from '../prompts';
+import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt, buildContext, REFUSAL_MESSAGES } from '../prompts';
+import { verifyAnswer } from '../verification';
 import { withRetry, remainingBudget } from '../../../shared/resilience';
 import {
   budgetLeft,
@@ -52,7 +53,39 @@ export function createAnswerNode(ctx: NodeContext) {
           { attempts: ctx.settings.llmMaxRetries, deadline: ctx.deadline },
         );
 
-        return { answer: text, usage };
+        /**
+         * Deterministic post-check, no extra model call.
+         *
+         * It cannot make hallucination impossible — nothing can. It makes one
+         * class of it impossible to ship SILENTLY: a figure the evidence never
+         * contained, or a citation pointing at a source that does not exist.
+         * In a product where every real answer is a number next to a source,
+         * that is the shape a fabricated claim takes.
+         *
+         * It reports rather than refuses. A false positive that erases a
+         * correct answer costs more than a flagged number the reader can check
+         * against the evidence panel — which is right there, on the same screen.
+         */
+        const check = verifyAnswer({
+          answer: text,
+          context: buildContext(state.documents, state.toolResults),
+          sourceCount: state.documents.length + state.toolResults.length,
+          question: state.standaloneQuestion,
+        });
+
+        const unverified: string[] = [];
+        if (check.unsupportedFigures.length > 0) {
+          unverified.push(
+            `números sem respaldo nas fontes: ${check.unsupportedFigures.join(', ')}`,
+          );
+        }
+        if (check.invalidCitations.length > 0) {
+          unverified.push(
+            `citações para fontes inexistentes: ${check.invalidCitations.map((n) => `[${n}]`).join(', ')}`,
+          );
+        }
+
+        return { answer: text, usage, unverified };
       } catch {
         if (streamedText.trim().length > 0) {
           return {

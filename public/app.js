@@ -167,6 +167,8 @@
   var secFalls = $("sec-falls");
   var secSrc = $("sec-src");
   var secWarn = $("sec-warn");
+  var secUnver = $("sec-unver");
+  var unverifiedEl = $("unverified");
   var secNote = $("sec-note");
   var secInterp = $("sec-interp");
   var interpEl = $("interp");
@@ -300,6 +302,11 @@
     warningsEl.replaceChildren();
     secWarn.hidden = warnings.length === 0;
     for (const warning of warnings) warningsEl.append(el("div", "", `\u2022 ${warning}`));
+  }
+  function renderUnverified(itens) {
+    unverifiedEl.replaceChildren();
+    secUnver.hidden = itens.length === 0;
+    for (const item of itens) unverifiedEl.append(el("div", "", item));
   }
   function renderNotes(notes) {
     notesEl.replaceChildren();
@@ -511,6 +518,7 @@
           renderWaterfall(result.timings.perNode);
           renderWarnings(result.warnings);
           renderNotes(result.notes);
+          renderUnverified(result.unverified);
           scroll();
           remember(text, result.answer);
           renderInterpretation(result.interpretedAs);

@@ -1031,6 +1031,56 @@ esse teto.
 
 ---
 
+## Verificação da resposta
+
+### D72. Verificação determinística pós-geração, sem chamada extra ao modelo
+
+**O pedido foi "faça com que não alucine".** Isso não é alcançável: alucinação é
+propriedade do modelo, não do código, e nenhum arranjo de prompt a elimina. O
+que é alcançável, e foi feito, é impedir que **uma classe** dela passe calada.
+
+Duas checagens rodam depois da geração, em código, custo zero:
+
+- **Números sem respaldo.** Todo número afirmado na resposta precisa aparecer
+  nas fontes, na pergunta, ou ser derivável por soma, subtração, multiplicação
+  ou divisão entre dois deles. O que sobra é figura fabricada.
+- **Citações inválidas.** Todo marcador `[n]` precisa apontar para uma fonte que
+  existe. `[7]` com cinco fontes é referência inventada.
+
+**Por que números:** neste produto, toda resposta real é um número com uma fonte
+ao lado — 30 dias, 10 dias, R$ 150,00, 3 dias úteis. É a forma que uma afirmação
+falsa assume aqui.
+
+**Reporta, não recusa.** Um falso positivo que apaga resposta correta custa mais
+que um número sinalizado que o leitor confere no painel de evidência, que está
+na mesma tela. Se a taxa de acerto do detector subir com o uso, dá para
+endurecer; começar recusando seria endurecer sem dado.
+
+**O que ele NÃO pega, dito claramente:** raciocínio errado sobre números certos.
+O `30 - 10 = 20` daquele defeito é aritmética válida sobre dois números que
+estavam mesmo nas fontes — só a premissa estava errada. Nenhuma checagem
+sintática distingue isso; o que resolveu aquele caso foi ancorar o fato no
+corpus. O detector cobre a figura fabricada, não a inferência ruim.
+
+---
+
+### D73. A pergunta conta como evidência para efeito de números
+
+**Por quê:** medido contra o agente real. *"Qual o valor do auxílio home-office
+multiplicado por 12 meses?"* produz R$ 1.800,00, correto, e o `12` não está em
+fonte nenhuma — veio da pergunta. A primeira versão do detector acusou a própria
+resposta certa.
+
+Número que o **usuário** forneceu não é invenção do modelo. Sinalizá-lo
+transformaria o detector em ruído, e detector ruidoso é ignorado — o que é o
+mesmo que não existir.
+
+**Medido depois do ajuste:** 0 alertas em 26 perguntas do conjunto de avaliação,
+e 12 testes de unidade provando que ele dispara quando deve. Detector que nunca
+dispara é indistinguível de detector quebrado.
+
+---
+
 ## Decisões que eu reverteria ou revisitaria
 
 Escrito porque um documento que só lista acertos não é confiável.

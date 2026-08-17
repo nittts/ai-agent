@@ -50,6 +50,9 @@ export interface AnswerResult {
   refused: boolean;
   refusalReason: RefusalReason | null;
 
+  /** Figures and citations the post-generation check could not back. */
+  unverified: string[];
+
   interpretedAs: string | null;
   cache: 'HIT' | 'MISS' | 'OFF';
   timings: Timings;
@@ -113,6 +116,7 @@ export class AnswerQuestionUseCase {
           notes: [],
 
           interpretedAs: null,
+          unverified: [],
           cache: 'HIT',
           timings: { totalMs: Date.now() - start, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
 
@@ -182,6 +186,7 @@ export class AnswerQuestionUseCase {
       notes: state.notes,
       refused: state.refused,
       refusalReason: state.refusalReason,
+      unverified: state.unverified,
 
       interpretedAs:
         state.standaloneQuestion && state.standaloneQuestion !== state.question

@@ -39,6 +39,16 @@ export interface AskResponse {
 
   notes: string[];
 
+  /**
+   * O que a verificação determinística pós-geração não conseguiu respaldar:
+   * números que não aparecem nas fontes, e citações para fontes inexistentes.
+   *
+   * Vazio na esmagadora maioria das respostas. Quando não está, o console
+   * mostra — porque uma afirmação sem respaldo que ninguém vê é pior que uma
+   * recusa.
+   */
+  unverified: string[];
+
   refused: boolean;
   refusalReason: RefusalReason | null;
 

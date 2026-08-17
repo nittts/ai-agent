@@ -656,6 +656,9 @@
         display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
       }
 
+      .unver-list { color: var(--warn); font-size: 12px; line-height: 1.55; }
+      .unver-list div + div { margin-top: 6px; }
+
       .warn-list { color: var(--warn); font-size: 12px; line-height: 1.55; }
 
       /* Missing input is NOT an alarm: neutral ink, no amber. The system is
@@ -769,7 +772,12 @@
             <div class="note-list" id="notes"></div>
           </section>
 
-          <section id="sec-warn" hidden>
+          <section id="sec-unver" hidden>
+          <h2 class="label">Não verificado</h2>
+          <div class="unver-list" id="unverified"></div>
+        </section>
+
+        <section id="sec-warn" hidden>
             <h2 class="label">Falhas</h2>
             <div class="warn-list" id="warnings"></div>
           </section>

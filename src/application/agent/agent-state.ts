@@ -50,6 +50,16 @@ export const AgentState = Annotation.Root({
     default: () => [],
   }),
 
+  /**
+   * Figures the answer stated that the evidence does not contain, and citations
+   * pointing at sources that do not exist. Both are checked deterministically
+   * after generation, with no extra model call.
+   */
+  unverified: Annotation<string[]>({
+    reducer: (current, next) => [...current, ...next],
+    default: () => [],
+  }),
+
   recordNotFound: Annotation<boolean>({
     reducer: (current, next) => current || next,
     default: () => false,

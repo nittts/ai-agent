@@ -50,6 +50,8 @@ const notesEl = $('notes');
 const secFalls = $('sec-falls');
 const secSrc = $('sec-src');
 const secWarn = $('sec-warn');
+const secUnver = $('sec-unver');
+const unverifiedEl = $('unverified');
 const secNote = $('sec-note');
 const secInterp = $('sec-interp');
 const interpEl = $('interp');
@@ -219,6 +221,19 @@ function renderWarnings(warnings: string[]): void {
   warningsEl.replaceChildren();
   secWarn.hidden = warnings.length === 0;
   for (const warning of warnings) warningsEl.append(el('div', '', `• ${warning}`));
+}
+
+/*
+ * Afirmações que a verificação determinística não conseguiu respaldar.
+ *
+ * Fica em ambar como os avisos, e por motivo parecido: nada quebrou, mas há
+ * algo que o leitor precisa conferir antes de acreditar. Diferente dos avisos,
+ * aqui o problema está na PRÓPRIA RESPOSTA, não numa dependência.
+ */
+function renderUnverified(itens: string[]): void {
+  unverifiedEl.replaceChildren();
+  secUnver.hidden = itens.length === 0;
+  for (const item of itens) unverifiedEl.append(el('div', '', item));
 }
 
 function renderNotes(notes: string[]): void {
@@ -474,6 +489,7 @@ function ask(text: string): void {
         renderWaterfall(result.timings.perNode);
         renderWarnings(result.warnings);
         renderNotes(result.notes);
+        renderUnverified(result.unverified);
         scroll();
 
         remember(text, result.answer);
