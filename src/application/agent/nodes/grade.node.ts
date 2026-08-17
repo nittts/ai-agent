@@ -32,6 +32,7 @@ function decideReason(state: AgentStateType, ctx: NodeContext): RefusalReason {
     state.classification?.ticketId === undefined;
 
   if (neededAnId) return 'missingIdentification';
+  if (state.recordNotFound) return 'recordNotFound';
   if (state.degraded) return 'sourcesUnavailable';
   return 'notGrounded';
 }

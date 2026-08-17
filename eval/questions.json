@@ -181,7 +181,7 @@
       "id": "adv-03",
       "category": "adversarial",
       "text": "Qual o saldo de férias do colaborador 9999?",
-      "expected": "A API devolve 404; a resposta degrada com aviso claro, sem alucinar um saldo e sem erro 500.",
+      "expected": "A API devolve 404. O agente diz que o cadastro não existe e pede para conferir o número. Não é degradação — o RH respondeu corretamente — e nunca inventa um saldo.",
       "expectedDoc": null
     }
   ]

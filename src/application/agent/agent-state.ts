@@ -50,6 +50,11 @@ export const AgentState = Annotation.Root({
     default: () => [],
   }),
 
+  recordNotFound: Annotation<boolean>({
+    reducer: (current, next) => current || next,
+    default: () => false,
+  }),
+
   standaloneQuestion: Annotation<string>({
     reducer: (_current, next) => next,
     default: () => '',

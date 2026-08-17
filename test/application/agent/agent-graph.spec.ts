@@ -169,12 +169,30 @@ describe('agent graph', () => {
     expect(hr.calls).toHaveLength(0);
   });
 
-  it('an unknown id degrades with a clear message, never a 500', async () => {
+  /**
+   * An unknown id is NOT a degradation, and this test used to say it was.
+   *
+   * The HR system answered, and answered correctly: there is no such employee.
+   * Reporting an outage over a typo made the response contradict itself — the
+   * warning said "employee 9999 does not exist" while the headline said "the HR
+   * system did not respond in time". It also leaked the adapter's English error
+   * text into a product that speaks Portuguese.
+   *
+   * What the original test really guarded is still guarded: never a 500, never
+   * an invented balance, and a message that names what went wrong.
+   */
+  it('an unknown id is reported as a missing record, not as an outage', async () => {
     const state = await run('Qual o saldo de férias do colaborador 9999?');
 
-    expect(state.degraded).toBe(true);
-    expect(state.warnings.join(' ')).toMatch(/9999/);
     expect(state.refused).toBe(true);
+    expect(state.refusalReason).toBe('recordNotFound');
+    expect(state.degraded).toBe(false);
+    expect(state.warnings).toEqual([]);
+
+    // O usuário precisa saber que o problema é o número, e o texto é português.
+    expect(state.notes.join(' ')).toMatch(/não existe no sistema de RH/i);
+    expect(state.notes.join(' ')).not.toMatch(/does not exist/i);
+    expect(state.answer).not.toMatch(/\d+ dias/);
   });
 
   it('hybrid route: gathers BOTH a document and API data into one state', async () => {

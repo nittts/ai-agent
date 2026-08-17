@@ -509,7 +509,13 @@ não é confiável.
    que já é aberto — não um buraco novo —, mas continua sendo bloqueante para
    produção. Resolver identidade (e a ACL de recuperação que vem junto) é o
    risco nº 2 do ADR.
-7. **A suíte não cobre o julgamento do classificador.** Os testes rodam com o
+7. **O classificador acerta a rota em 21 de 23 perguntas com gabarito.** As duas
+   imprecisões medidas não produzem resposta errada — `kb-07` vai para `hybrid`
+   e pergunta a matrícula que não precisaria, e `hibrida-04` vai para `tool` e
+   ainda assim responde certo, porque o SLA vem no próprio payload do chamado.
+   Rota errada nem sempre é resposta errada, e é por isso que a avaliação de
+   rota não substitui a leitura das respostas.
+8. **A suíte não cobre o julgamento do classificador.** Os testes rodam com o
    provider fake, então provam que o **grafo** trata cada rota corretamente —
    não que o **modelo** escolhe a rota certa. Dois defeitos reais escaparam por
    essa fresta (o "reembolsáveis" que continha "bolsa", e o "olá" classificado
@@ -517,6 +523,6 @@ não é confiável.
    um conjunto de avaliação de classificação rodado contra o modelo real, com
    custo e não-determinismo — decisão consciente de não fazer aqui, mas é a
    lacuna que eu fecharia primeiro.
-8. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
+9. **`SimpleSpanProcessor` no OTel.** Faz I/O no caminho do request. Em produção
    seria `BatchSpanProcessor`; aqui é aceitável porque o destino é o console e o
    tracing fica desligado durante os benchmarks.

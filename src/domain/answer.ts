@@ -15,6 +15,8 @@ export type RefusalReason =
 
   | 'unresolvedFollowUp'
 
+  | 'recordNotFound'
+
   | 'notGrounded'
 
   | 'missingIdentification'

@@ -185,6 +185,7 @@
     outOfScope: "fora de escopo",
     notGrounded: "sem fundamenta\xE7\xE3o",
     missingIdentification: "falta matr\xEDcula",
+    recordNotFound: "cadastro n\xE3o encontrado",
     sourcesUnavailable: "fontes indispon\xEDveis",
     timedOut: "tempo esgotado"
   };

@@ -54,6 +54,7 @@ export function createCallHrApiNode(ctx: NodeContext) {
       const sources: Source[] = [];
       const warnings: string[] = [];
       const notes: string[] = [];
+      let recordNotFound = false;
 
       outcomes.forEach((outcome, index) => {
         if (outcome.status === 'fulfilled') {
@@ -69,6 +70,14 @@ export function createCallHrApiNode(ctx: NodeContext) {
           return;
         }
 
+        if (outcome.reason instanceof RecordNotFoundError) {
+          recordNotFound = true;
+          notes.push(
+            `Não encontrei ${DATA_LABEL[requested[index]] ?? 'esse dado'}: esse cadastro não existe no sistema de RH.`,
+          );
+          return;
+        }
+
         warnings.push(describeFailure(requested[index], outcome.reason));
       });
 
@@ -77,6 +86,7 @@ export function createCallHrApiNode(ctx: NodeContext) {
         sources,
         warnings,
         notes,
+        recordNotFound,
 
         degraded: warnings.length > 0,
       };
@@ -86,7 +96,6 @@ export function createCallHrApiNode(ctx: NodeContext) {
 function describeFailure(toolName: string, error: unknown): string {
   const label = DATA_LABEL[toolName] ?? 'esse dado';
 
-  if (error instanceof RecordNotFoundError) return `${label}: ${error.message}`;
   if (error instanceof ContractViolationError) {
     return `não consegui ler ${label}: o sistema de RH respondeu em formato inesperado`;
   }

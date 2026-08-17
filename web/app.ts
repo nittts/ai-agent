@@ -71,6 +71,7 @@ const REFUSAL_LABEL: Record<string, string> = {
   outOfScope: 'fora de escopo',
   notGrounded: 'sem fundamentação',
   missingIdentification: 'falta matrícula',
+  recordNotFound: 'cadastro não encontrado',
   sourcesUnavailable: 'fontes indisponíveis',
   timedOut: 'tempo esgotado',
 };
