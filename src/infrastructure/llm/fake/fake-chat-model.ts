@@ -94,8 +94,32 @@ export class FakeChatModel implements ChatModelPort {
         t,
       );
 
+    /**
+     * Fecho de conversa: agradecimento ou reação. Vem ANTES do meta porque
+     * "beleza então" e "valeu" não perguntam nada — responder com o catálogo de
+     * capacidades seria a resposta certa para outra pergunta.
+     */
+    const closing =
+      /^(valeu|vlw|obrigad|brigad|beleza|blz|nice|show|massa|tranquilo|ok|entendi|perfeito|otimo|legal)\b|\bvou (vender|fazer|pedir|solicitar|tentar)\b/.test(
+        t,
+      );
+
+    if (closing) {
+      return {
+        route: 'meta',
+        metaKind: 'closing',
+        standaloneQuestion,
+        reason: 'conversational closing',
+      };
+    }
+
     if (meta) {
-      return { route: 'meta', standaloneQuestion, reason: 'about the assistant itself' };
+      return {
+        route: 'meta',
+        metaKind: 'about',
+        standaloneQuestion,
+        reason: 'about the assistant itself',
+      };
     }
 
     const personalMarker =

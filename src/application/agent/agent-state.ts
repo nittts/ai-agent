@@ -17,6 +17,15 @@ export const classificationSchema = z.object({
         'unresolvedFollowUp: refers to an earlier turn that is missing or unusable.',
     ),
 
+  metaKind: z
+    .enum(['about', 'closing'])
+    .optional()
+    .describe(
+      'Only for the meta route. "closing" when the user is thanking, reacting or ' +
+        'signing off ("valeu", "beleza", "nice, vou fazer isso"); "about" when they ' +
+        'are asking who the assistant is or what it does.',
+    ),
+
   standaloneQuestion: z
     .string()
     .describe(
