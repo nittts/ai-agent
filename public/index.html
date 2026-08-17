@@ -14,7 +14,7 @@
     -->
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d4ed8'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3ERH%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233f3d8f'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3ERH%3C/text%3E%3C/svg%3E"
     />
     <style>
       /* ===================================================================
@@ -36,51 +36,53 @@
       :root {
         color-scheme: light dark;
 
-        --bg: #f7f8fa;
+        --bg: #e9eae6;
         --panel: #ffffff;
-        --panel-alt: #fbfcfd;
-        --ink: #0f1319;
-        --ink-2: #4a5361;
-        --ink-3: #838d9c;
-        --line: #e3e7ed;
-        --line-2: #cdd4de;
+        --panel-alt: #f6f6f3;
+        --ink: #1b1b18;
+        --ink-2: #55564e;
+        --ink-3: #8a8b82;
+        --line: #dcddd7;
+        --line-2: #c3c5bd;
 
-        --accent: #1667c7;
-        --accent-ink: #0d4f9e;
-        --accent-wash: #eaf2fd;
-        --ok: #0f7346;
-        --ok-wash: #e4f4ec;
-        --warn: #8d5406;
-        --warn-wash: #fdf0dc;
-        --quiet: #5a6472;
+        --accent: #3f3d8f;
+        --accent-ink: #2e2c6e;
+        --accent-wash: #ecebf6;
+        --ok: #1c6b45;
+        --ok-wash: #e3efe8;
+        --warn: #8a5209;
+        --warn-wash: #f7edda;
+        --quiet: #6b6c63;
 
-        --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font: var(--ui);
+        --doc: ui-serif, Charter, 'Bitstream Charter', 'Iowan Old Style', 'Source Serif 4', Georgia, serif;
         --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-        --r: 12px;
-        --r-sm: 8px;
-        --shadow: 0 1px 2px rgb(15 19 25 / 0.04), 0 4px 12px -6px rgb(15 19 25 / 0.08);
+        --r: 3px;
+        --r-sm: 2px;
+        --shadow: 0 1px 0 rgb(27 27 24 / 0.04), 0 1px 3px rgb(27 27 24 / 0.06);
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #0b0e12;
-          --panel: #12161c;
-          --panel-alt: #151a21;
-          --ink: #e9ecf1;
-          --ink-2: #a3adbb;
-          --ink-3: #6f7a89;
-          --line: #222932;
-          --line-2: #333c48;
+          --bg: #16171a;
+          --panel: #1d1f23;
+          --panel-alt: #232529;
+          --ink: #e8e8e3;
+          --ink-2: #a9aaa2;
+          --ink-3: #757770;
+          --line: #2c2e33;
+          --line-2: #3c3f45;
 
-          --accent: #63b0f5;
-          --accent-ink: #8cc7fb;
-          --accent-wash: #10233a;
-          --ok: #56c08a;
-          --ok-wash: #0e2a1e;
-          --warn: #d9a24b;
-          --warn-wash: #2a2114;
-          --quiet: #99a3b1;
+          --accent: #9b98ee;
+          --accent-ink: #b6b3f5;
+          --accent-wash: #23224a;
+          --ok: #5cbb8b;
+          --ok-wash: #16301f;
+          --warn: #d5a054;
+          --warn-wash: #2b2213;
+          --quiet: #8c8e86;
 
           --shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.6);
         }
@@ -158,7 +160,7 @@
         gap: 6px;
         padding: 5px 10px;
         border: 1px solid var(--line);
-        border-radius: 999px;
+        border-radius: var(--r-sm);
         background: var(--panel-alt);
         font: 500 11.5px/1 var(--mono);
         color: var(--ink-2);
@@ -178,7 +180,7 @@
         gap: 8px;
         padding: 7px 12px;
         border: 1px solid var(--line);
-        border-radius: 999px;
+        border-radius: var(--r-sm);
         font-size: 12.5px;
         color: var(--ink-2);
         cursor: pointer;
@@ -194,7 +196,7 @@
         color: var(--ink-2);
         background: var(--panel);
         border: 1px solid var(--line-2);
-        border-radius: 999px;
+        border-radius: var(--r);
         padding: 8px 13px;
         cursor: pointer;
         transition: color 120ms, border-color 120ms;
@@ -283,26 +285,42 @@
       .chip:active { transform: translateY(1px); }
 
       /* ---------------- turns ---------------- */
+      /*
+        A pergunta não é uma bolha colorida.
+
+        Bolha azul à direita é a linguagem do iMessage, e este produto não é um
+        mensageiro — é um balcão de atendimento interno. A pergunta fica como um
+        registro: alinhada à direita, sem preenchimento, marcada por um filete da
+        cor do carimbo. Toda a cor da tela sobra para o que importa.
+      */
       .q {
         justify-self: end;
-        max-width: 85%;
+        max-width: 82%;
         margin-left: auto;
-        background: var(--accent);
-        color: #fff;
-        padding: 11px 15px;
-        border-radius: var(--r) var(--r) 3px var(--r);
-        font-weight: 500;
-        line-height: 1.5;
-        box-shadow: var(--shadow);
+        padding: 2px 14px 2px 0;
+        border-right: 2px solid var(--accent);
+        color: var(--ink);
+        font: 500 15px/1.5 var(--ui);
+        text-align: right;
       }
 
+      /*
+        A resposta é uma FOLHA sobre a mesa, e o texto dela é serifado.
+
+        Não é enfeite: o que está ali é extrato de política interna, com
+        referência numerada. Serifa é a letra desse tipo de texto, e ela separa
+        visualmente o que o sistema AFIRMA (documento) do que ele apenas rotula
+        (interface, em sans).
+      */
       .a {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: var(--r) var(--r) var(--r) 3px;
-        padding: 16px 18px;
+        border-radius: var(--r);
+        padding: 18px 22px;
         box-shadow: var(--shadow);
-        animation: rise 240ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+        font: 16px/1.62 var(--doc);
+        color: var(--ink);
+        animation: rise 200ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
       }
 
       /* Rendered Markdown. The model answers in Markdown, so the console parses
@@ -349,15 +367,13 @@
       .a[data-refused='true'] { color: var(--quiet); background: var(--panel-alt); }
       @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
 
+      /* Nota de referência, como num parecer — não etiqueta colorida. */
       .cite {
-        display: inline-block;
-        font: 650 10.5px/1 var(--mono);
-        color: var(--accent-ink);
-        background: var(--accent-wash);
-        border-radius: 4px;
-        padding: 2px 5px;
-        vertical-align: 0.2em;
-        margin: 0 1px;
+        font: 600 11px/1 var(--mono);
+        color: var(--accent);
+        vertical-align: super;
+        font-size: 10px;
+        margin-left: 1px;
       }
 
       .caret::after {
@@ -401,9 +417,8 @@
         color: inherit;
         background: var(--panel);
         border: 1px solid var(--line-2);
-        border-radius: 999px;
-        padding: 13px 20px;
-        box-shadow: var(--shadow);
+        border-radius: var(--r);
+        padding: 13px 16px;
         transition: border-color 120ms, box-shadow 120ms;
       }
       .composer input::placeholder { color: var(--ink-3); }
@@ -416,7 +431,7 @@
         border: none;
         background: var(--accent);
         color: #fff;
-        border-radius: 999px;
+        border-radius: var(--r);
         width: 46px; height: 46px;
         display: grid;
         place-items: center;
@@ -553,8 +568,6 @@
         .brand { font-size: 14px; }
         .brand span, .wide-only { display: none; }
         .fact { font-size: 10.5px; padding: 4px 8px; }
-        /* O estado do cache aparece por resposta no painel; no header e redundante. */
-        .fact:nth-of-type(2) { display: none; }
         .switch { font-size: 11px; padding: 6px 9px; }
         .ghost { font-size: 11px; padding: 6px 10px; }
 
@@ -656,6 +669,9 @@
         display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
       }
 
+      .env .facts { flex-direction: column; align-items: flex-start; gap: 7px; }
+      .env .switch { margin-top: 10px; }
+
       .unver-list { color: var(--warn); font-size: 12px; line-height: 1.55; }
       .unver-list div + div { margin-top: 6px; }
 
@@ -681,17 +697,7 @@
 
   <body>
     <header>
-      <div class="brand">Assistente RH/TI <span>· agente LangGraph</span></div>
-      <div class="facts" id="facts"></div>
-      <label class="switch" id="chaos-label" data-on="false" hidden>
-        <input type="checkbox" id="chaos" />
-        Derrubar<span class="wide-only"> API de</span> RH
-      </label>
-      <!--
-        A conversa sobrevive ao reload (sessionStorage), então é preciso um jeito
-        explícito de zerá-la. Sem isso, numa demo o contexto de uma pergunta
-        vaza para a próxima e o agente parece responder a coisa errada.
-      -->
+      <div class="brand">Assistente RH/TI</div>
       <button type="button" class="ghost" id="reset" hidden>
         Nova<span class="wide-only"> conversa</span>
       </button>
@@ -781,6 +787,23 @@
             <h2 class="label">Falhas</h2>
             <div class="warn-list" id="warnings"></div>
           </section>
+        <!--
+          Configuração de DEMONSTRAÇÃO, não do produto.
+
+          Modelo ativo, estado do cache e o interruptor de falha são instrumentos
+          de quem avalia. No cabeçalho eles competiam com a conversa e sugeriam
+          que o usuário devia se importar com qual LLM responde — não devia.
+          Aqui ficam junto do resto da evidência, e somem com ela quando o painel
+          é recolhido.
+        -->
+        <section id="sec-env" class="env">
+          <h2 class="label">Ambiente da demonstração</h2>
+          <div class="facts" id="facts"></div>
+          <label class="switch" id="chaos-label" data-on="false" hidden>
+            <input type="checkbox" id="chaos" />
+            Derrubar API de RH
+          </label>
+        </section>
         </div>
       </aside>
     </main>
