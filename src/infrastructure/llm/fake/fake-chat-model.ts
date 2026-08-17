@@ -90,36 +90,18 @@ export class FakeChatModel implements ChatModelPort {
     }
 
     const meta =
-      /^(ola|olah|oi|bom dia|boa tarde|boa noite|hey|opa)\b|(o que|oque|que)\s+(voce|vc)\s+(pode|consegue|sabe)|(quais|que)\s+(assuntos|temas|topicos)|(como|pra que)\s+(voce|vc|te)\s+(funciona|uso|serve)|quem\s+(e|eh)\s+voce/.test(
+      /^(ola|olah|oi|salve|eae|e ai|bom dia|boa tarde|boa noite|hey|opa)\b|(o que|oque|que)\s+(voce|vc)\s+(pode|consegue|sabe)|(quais|que)\s+(assuntos|temas|topicos)|(como|pra que)\s+(voce|vc|te)\s+(funciona|uso|serve)|quem\s+(e|eh)\s+voce/.test(
         t,
       );
 
     /**
-     * Fecho de conversa: agradecimento ou reação. Vem ANTES do meta porque
-     * "beleza então" e "valeu" não perguntam nada — responder com o catálogo de
-     * capacidades seria a resposta certa para outra pergunta.
+     * O fake diz apenas QUE é meta. Ele nao tenta dizer QUAL tipo — isso e
+     * julgamento de linguagem, e regex nunca vai classificar como um modelo.
+     * A tabela de decisao trata `metaKind` ausente com um padrao seguro, e e
+     * testada direto em meta-answer.spec.ts.
      */
-    const closing =
-      /^(valeu|vlw|obrigad|brigad|beleza|blz|nice|show|massa|tranquilo|ok|entendi|perfeito|otimo|legal)\b|\bvou (vender|fazer|pedir|solicitar|tentar)\b/.test(
-        t,
-      );
-
-    if (closing) {
-      return {
-        route: 'meta',
-        metaKind: 'closing',
-        standaloneQuestion,
-        reason: 'conversational closing',
-      };
-    }
-
     if (meta) {
-      return {
-        route: 'meta',
-        metaKind: 'about',
-        standaloneQuestion,
-        reason: 'about the assistant itself',
-      };
+      return { route: 'meta', standaloneQuestion, reason: 'about the assistant itself' };
     }
 
     const personalMarker =

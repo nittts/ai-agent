@@ -294,26 +294,6 @@ describe('agent graph', () => {
   });
 
   /**
-   * "valeu", "nice, vou vender", "beleza" — o usuário está se despedindo ou
-   * reagindo, não pedindo um catálogo de capacidades. Responder com as nove
-   * linhas de apresentação é a resposta certa para outra pergunta.
-   */
-  it.each(['nice, vou vender', 'valeu, obrigado!', 'beleza então'])(
-    'closing: %s gets a short acknowledgement, not the introduction',
-    async (question) => {
-      const state = await runWithHistory(question, [
-        { role: 'user', content: 'quantas férias eu tenho, sou o 1042' },
-        { role: 'assistant', content: 'Você tem 18 dias de férias disponíveis [5].' },
-      ]);
-
-      expect(state.route).toBe('meta');
-      expect(state.refused).toBe(false);
-      expect(state.answer.length).toBeLessThan(200);
-      expect(state.answer).not.toContain('Posso te ajudar com');
-    },
-  );
-
-  /**
    * A janela de histórico guarda 6 turnos. Numa conversa mais longa a
    * apresentação SAI dela, e a primeira versão desta checagem procurava o texto
    * da saudação — então voltava a despejar o catálogo inteiro. Basta existir

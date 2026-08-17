@@ -18,12 +18,12 @@ export const classificationSchema = z.object({
     ),
 
   metaKind: z
-    .enum(['about', 'closing'])
+    .enum(['greeting', 'about', 'closing'])
     .optional()
     .describe(
-      'Only for the meta route. "closing" when the user is thanking, reacting or ' +
-        'signing off ("valeu", "beleza", "nice, vou fazer isso"); "about" when they ' +
-        'are asking who the assistant is or what it does.',
+      'Only for the meta route. "greeting" for hello ("olá", "salve", "eae"); ' +
+        '"closing" for thanks or sign-off AFTER something was answered; ' +
+        '"about" when asking who the assistant is or what it does.',
     ),
 
   standaloneQuestion: z
