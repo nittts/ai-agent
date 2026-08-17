@@ -42,7 +42,7 @@ export const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
 
-  HR_API_BASE_URL: z.string().url().default('http://127.0.0.1:3000/mock/v1'),
+  HR_API_BASE_URL: z.string().url().optional(),
 
   CHAOS_ENABLED: z
     .enum(['true', 'false'])
@@ -56,7 +56,14 @@ export const envSchema = z.object({
   OTEL_SERVICE_NAME: z.string().default('hr-it-assistant'),
 });
 
-export type Env = z.infer<typeof envSchema>;
+/**
+ * `HR_API_BASE_URL` e opcional no SCHEMA e obrigatorio no TIPO: `loadEnv`
+ * sempre o preenche a partir da PORT quando ausente. Sem esse estreitamento o
+ * consumidor interpolaria `undefined` numa URL sem o compilador reclamar.
+ */
+export type Env = Omit<z.infer<typeof envSchema>, 'HR_API_BASE_URL'> & {
+  HR_API_BASE_URL: string;
+};
 
 function validateCrossFieldRules(source: NodeJS.ProcessEnv): string[] {
   const errors: string[] = [];
@@ -83,6 +90,30 @@ function validateCrossFieldRules(source: NodeJS.ProcessEnv): string[] {
   return errors;
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::1', '[::1]']);
+
+const MOCK_MOUNT = '/mock/v1';
+
+export function selfHostedHrApi(port: number): string {
+  return `http://127.0.0.1:${port}${MOCK_MOUNT}`;
+}
+
+export function hrApiLooksMisdirected(url: string, port: number): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  const host = parsed.hostname.replace(/^\[|\]$/g, '');
+  const loopback = LOOPBACK_HOSTS.has(host) || LOOPBACK_HOSTS.has(parsed.hostname);
+  if (!loopback || parsed.pathname.replace(/\/$/, '') !== MOCK_MOUNT) return false;
+
+  const current = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+  return current !== String(port);
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = envSchema.safeParse(source);
 
@@ -97,5 +128,17 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Invalid environment configuration:\n${errors.join('\n')}`);
   }
 
-  return (parsed as { success: true; data: Env }).data;
+  const env = (parsed as { success: true; data: Env }).data;
+
+  if (env.HR_API_BASE_URL === undefined) {
+    env.HR_API_BASE_URL = selfHostedHrApi(env.PORT);
+  } else if (hrApiLooksMisdirected(env.HR_API_BASE_URL, env.PORT)) {
+    process.stderr.write(
+      `warn: HR_API_BASE_URL is ${env.HR_API_BASE_URL}, but this process serves ${MOCK_MOUNT} on ` +
+        `port ${env.PORT}. Every question about employee data will report that the HR system did ` +
+        `not respond. Unset HR_API_BASE_URL to let it follow PORT.\n`,
+    );
+  }
+
+  return env;
 }

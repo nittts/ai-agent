@@ -1,9 +1,49 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadEnv } from '../../../src/infrastructure/config/env';
+import { loadEnv, hrApiLooksMisdirected } from '../../../src/infrastructure/config/env';
 
 describe('loadEnv', () => {
+  /**
+   * The DEFAULT follows PORT. Nothing else does.
+   *
+   * An earlier version rewrote an explicitly-set loopback URL to match PORT, and
+   * it broke two legitimate configurations: the HR client suite, which points at
+   * a stub on a random port, and the HTTP e2e suite, which points at its own
+   * instance — whose listening port is NOT `process.env.PORT`, because the test
+   * passes it to `app.listen()` directly.
+   *
+   * That last part is the real lesson: at config-load time the process cannot
+   * know which port it will actually listen on, so it is not entitled to
+   * "correct" anyone. Explicit configuration wins; a suspicious value earns a
+   * warning, not a silent rewrite.
+   */
+  it('derives HR_API_BASE_URL from PORT when it is not set', () => {
+    const env = loadEnv({ LLM_PROVIDER: 'fake', PORT: '8080' } as NodeJS.ProcessEnv);
+
+    expect(env.HR_API_BASE_URL).toBe('http://127.0.0.1:8080/mock/v1');
+  });
+
+  it('respects an explicit HR_API_BASE_URL even when it disagrees with PORT', () => {
+    const env = loadEnv({
+      LLM_PROVIDER: 'fake',
+      PORT: '8080',
+      HR_API_BASE_URL: 'http://127.0.0.1:3000/mock/v1',
+    } as NodeJS.ProcessEnv);
+
+    expect(env.HR_API_BASE_URL).toBe('http://127.0.0.1:3000/mock/v1');
+  });
+
+  it('never touches a remote HR_API_BASE_URL', () => {
+    const env = loadEnv({
+      LLM_PROVIDER: 'fake',
+      PORT: '8080',
+      HR_API_BASE_URL: 'https://rh.empresa.com/api/v1',
+    } as NodeJS.ProcessEnv);
+
+    expect(env.HR_API_BASE_URL).toBe('https://rh.empresa.com/api/v1');
+  });
+
   it('accepts LLM_PROVIDER=fake with no credentials', () => {
     const env = loadEnv({ LLM_PROVIDER: 'fake' } as NodeJS.ProcessEnv);
 
@@ -93,8 +133,17 @@ describe('loadEnv', () => {
     const declared = new Set(
       readFileSync(join(process.cwd(), '.env.example'), 'utf-8')
         .split('\n')
-        .filter((line) => /^[A-Z0-9_]+=/.test(line))
-        .map((line) => line.slice(0, line.indexOf('='))),
+        /**
+         * Uma variavel COMENTADA continua declarada para efeito deste teste: ela
+         * esta documentada, so nao vem ligada por padrao. E o que permite
+         * mostrar `HR_API_BASE_URL` sem que um `cp .env.example .env` a defina —
+         * o gesto que levou a producao a apontar para a porta errada.
+         */
+        .filter((line) => /^#?\s*[A-Z0-9_]+=/.test(line))
+        .map((line) => {
+          const clean = line.replace(/^#\s*/, '');
+          return clean.slice(0, clean.indexOf('='));
+        }),
     );
 
     const known = new Set(
@@ -108,5 +157,36 @@ describe('loadEnv', () => {
 
     expect([...declared].filter((k) => !known.has(k))).toEqual([]);
     expect([...known].filter((k) => !declared.has(k))).toEqual([]);
+  });
+});
+
+/**
+ * The detector behind the warning. It answers one narrow question: does this URL
+ * name THIS process's own mock mount while pointing at a different port?
+ */
+describe('hrApiLooksMisdirected', () => {
+  it.each(['http://127.0.0.1:3000/mock/v1', 'http://localhost:3000/mock/v1', 'http://0.0.0.0:3000/mock/v1'])(
+    'flags a loopback mock mount on the wrong port: %s',
+    (url) => {
+      expect(hrApiLooksMisdirected(url, 8080)).toBe(true);
+    },
+  );
+
+  it('says nothing when the port already agrees', () => {
+    expect(hrApiLooksMisdirected('http://127.0.0.1:8080/mock/v1', 8080)).toBe(false);
+  });
+
+  /** A stub or a second instance on another port is a valid setup, not a mistake. */
+  it('ignores a loopback address that is not the mock mount', () => {
+    expect(hrApiLooksMisdirected('http://127.0.0.1:45231', 8080)).toBe(false);
+    expect(hrApiLooksMisdirected('http://127.0.0.1:45231/employees', 8080)).toBe(false);
+  });
+
+  it('ignores a remote host entirely', () => {
+    expect(hrApiLooksMisdirected('https://rh.empresa.com/mock/v1', 8080)).toBe(false);
+  });
+
+  it('does not throw on a value that is not a URL', () => {
+    expect(hrApiLooksMisdirected('nao-e-url', 8080)).toBe(false);
   });
 });
