@@ -14,7 +14,7 @@
     -->
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233f3d8f'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3ERH%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23b4522e'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3ERH%3C/text%3E%3C/svg%3E"
     />
     <style>
       /* ===================================================================
@@ -36,53 +36,53 @@
       :root {
         color-scheme: light dark;
 
-        --bg: #e9eae6;
+        --bg: #fbfbfa;
         --panel: #ffffff;
-        --panel-alt: #f6f6f3;
-        --ink: #1b1b18;
-        --ink-2: #55564e;
-        --ink-3: #8a8b82;
-        --line: #dcddd7;
-        --line-2: #c3c5bd;
+        --panel-alt: #f5f5f3;
+        --ink: #1c1b19;
+        --ink-2: #5c5a55;
+        --ink-3: #918e87;
+        --line: #e9e8e4;
+        --line-2: #d6d4ce;
 
-        --accent: #3f3d8f;
-        --accent-ink: #2e2c6e;
-        --accent-wash: #ecebf6;
-        --ok: #1c6b45;
-        --ok-wash: #e3efe8;
-        --warn: #8a5209;
-        --warn-wash: #f7edda;
-        --quiet: #6b6c63;
+        --accent: #b4522e;
+        --accent-ink: #8f3f22;
+        --accent-wash: #fbeee8;
+        --ok: #2f6f4e;
+        --ok-wash: #e8f1eb;
+        --warn: #8a5a12;
+        --warn-wash: #f7efdf;
+        --quiet: #7b7871;
 
         --ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         --font: var(--ui);
-        --doc: ui-serif, Charter, 'Bitstream Charter', 'Iowan Old Style', 'Source Serif 4', Georgia, serif;
+        --doc: var(--ui);
         --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-        --r: 3px;
-        --r-sm: 2px;
-        --shadow: 0 1px 0 rgb(27 27 24 / 0.04), 0 1px 3px rgb(27 27 24 / 0.06);
+        --r: 14px;
+        --r-sm: 10px;
+        --shadow: 0 2px 24px -12px rgb(28 27 25 / 0.18);
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #16171a;
-          --panel: #1d1f23;
-          --panel-alt: #232529;
-          --ink: #e8e8e3;
-          --ink-2: #a9aaa2;
-          --ink-3: #757770;
-          --line: #2c2e33;
-          --line-2: #3c3f45;
+          --bg: #191817;
+          --panel: #201f1d;
+          --panel-alt: #232220;
+          --ink: #eceae5;
+          --ink-2: #aaa69e;
+          --ink-3: #807c74;
+          --line: #2c2a27;
+          --line-2: #3b3833;
 
-          --accent: #9b98ee;
-          --accent-ink: #b6b3f5;
-          --accent-wash: #23224a;
-          --ok: #5cbb8b;
-          --ok-wash: #16301f;
-          --warn: #d5a054;
-          --warn-wash: #2b2213;
-          --quiet: #8c8e86;
+          --accent: #e08b62;
+          --accent-ink: #eda37f;
+          --accent-wash: #2e211a;
+          --ok: #63b489;
+          --ok-wash: #1a2b21;
+          --warn: #d9a75c;
+          --warn-wash: #2d2415;
+          --quiet: #8b877f;
 
           --shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.6);
         }
@@ -130,13 +130,13 @@
         display: flex;
         align-items: center;
         gap: 14px;
-        min-height: 60px;
+        min-height: 72px;
         flex: 0 0 auto;
         flex-wrap: wrap;
         row-gap: 8px;
         padding: 0 22px;
-        background: var(--panel);
-        border-bottom: 1px solid var(--line);
+        background: transparent;
+        border-bottom: 0;
         flex-wrap: wrap;
       }
 
@@ -144,8 +144,8 @@
         display: flex;
         align-items: baseline;
         gap: 8px;
-        font-weight: 660;
-        font-size: 15px;
+        font-weight: 600;
+        font-size: 17px;
         letter-spacing: -0.015em;
         margin-right: auto;
       }
@@ -224,6 +224,7 @@
         altura do header em dois lugares, e mudá-la num deles desalinhava tudo.
       */
       .stage {
+        border-top: 1px solid var(--line);
         display: grid;
         grid-template-columns: minmax(0, 1fr) 372px;
         flex: 1;
@@ -237,16 +238,16 @@
         min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
-        padding: 28px 24px 8px;
+        padding: 40px 24px 12px;
         scroll-behavior: smooth;
       }
       /* A readable measure, centred — full-bleed prose across 900px is hostile. */
       .thread-inner {
-        max-width: 720px;
+        max-width: 640px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        gap: 34px;
       }
 
       /* ---------------- empty state (does real work) ---------------- */
@@ -293,14 +294,19 @@
         registro: alinhada à direita, sem preenchimento, marcada por um filete da
         cor do carimbo. Toda a cor da tela sobra para o que importa.
       */
+      /*
+        A pergunta nao disputa atencao com a resposta: e o rotulo do que vem
+        abaixo. Toda a hierarquia tipografica da tela existe para a resposta.
+      */
       .q {
         justify-self: end;
-        max-width: 82%;
+        max-width: 92%;
         margin-left: auto;
-        padding: 2px 14px 2px 0;
-        border-right: 2px solid var(--accent);
-        color: var(--ink);
-        font: 500 15px/1.5 var(--ui);
+        padding: 0;
+        border: 0;
+        color: var(--ink-3);
+        font: 600 13px/1.5 var(--ui);
+        letter-spacing: 0.015em;
         text-align: right;
       }
 
@@ -312,15 +318,21 @@
         visualmente o que o sistema AFIRMA (documento) do que ele apenas rotula
         (interface, em sans).
       */
+      /*
+        Sem card, sem borda, sem sombra: a separacao entre turnos e feita por
+        ESPACO. E o que deixa a resposta parecer texto para ler, e nao registro
+        de sistema.
+      */
       .a {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: var(--r);
-        padding: 18px 22px;
-        box-shadow: var(--shadow);
-        font: 16px/1.62 var(--doc);
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        padding: 10px 0 0;
+        box-shadow: none;
+        font: 17px/1.72 var(--doc);
+        letter-spacing: -0.006em;
         color: var(--ink);
-        animation: rise 200ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+        animation: rise 220ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
       }
 
       /* Rendered Markdown. The model answers in Markdown, so the console parses
@@ -417,8 +429,8 @@
         color: inherit;
         background: var(--panel);
         border: 1px solid var(--line-2);
-        border-radius: var(--r);
-        padding: 13px 16px;
+        border-radius: 999px;
+        padding: 15px 22px;
         transition: border-color 120ms, box-shadow 120ms;
       }
       .composer input::placeholder { color: var(--ink-3); }
@@ -431,7 +443,7 @@
         border: none;
         background: var(--accent);
         color: #fff;
-        border-radius: var(--r);
+        border-radius: 999px;
         width: 46px; height: 46px;
         display: grid;
         place-items: center;
@@ -453,7 +465,7 @@
         clicavel com a evidencia rolada ate o fim.
       */
       .evidence {
-        background: var(--panel);
+        background: var(--panel-alt);
         border-left: 1px solid var(--line);
         min-height: 0;
         display: flex;
@@ -571,8 +583,10 @@
         .switch { font-size: 11px; padding: 6px 9px; }
         .ghost { font-size: 11px; padding: 6px 10px; }
 
-        .thread { padding: 18px 14px 6px; }
-        .thread-inner { gap: 18px; }
+        .thread { padding: 22px 16px 8px; }
+        .thread-inner { gap: 24px; }
+        .a { font-size: 16px; line-height: 1.66; }
+        .q { font-size: 12.5px; }
         .composer { padding: 10px 14px 14px; }
         .composer input { padding: 11px 15px; font-size: 14px; }
         .composer button { width: 42px; height: 42px; }
