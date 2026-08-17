@@ -523,7 +523,7 @@ para enxergá-la. É o que permite ao console desenhar a cascata e responder
 
 ### D40. A suíte inteira roda sem credencial
 
-**Verificado com o `.env` removido do disco:** 202/202 passam.
+**Verificado com o `.env` removido do disco:** 231 passam, 7 pulam por exigirem Redis.
 
 **Por quê é arquitetural e não conveniência:** só é verdade se o provedor
 estiver atrás de uma interface que um fake consegue satisfazer. Essa restrição

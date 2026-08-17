@@ -192,6 +192,21 @@ A resposta traz `interpretedAs` — a pergunta reescrita — para que a
 reinterpretação seja **conferível** em vez de mágica. É `null` quando nada
 precisou ser resolvido.
 
+O assistente também distingue o que **não** é pergunta. Um cumprimento é
+cumprimentado, um agradecimento recebe um fecho curto, e a apresentação completa
+só aparece no primeiro contato:
+
+```
+salve assistente     → apresentação completa
+(depois de responder algo)
+nice, vou vender     → "Boa! Qualquer coisa de RH ou TI, é só chamar."
+salve de novo        → "Opa! Em que posso ajudar?"
+```
+
+Essa escolha é **determinística e nossa**, não do classificador: ele diz o tipo,
+mas a garantia de que um cumprimento nunca vira despedida está em código, com
+teste próprio. Delegar isso ao modelo produziu exatamente esse defeito uma vez.
+
 Três decisões que valem nota:
 
 - **A reescrita não custa chamada extra.** Sai do mesmo schema que o
@@ -205,6 +220,31 @@ Três decisões que valem nota:
   mesma mensagem de quem pergunta sobre futebol.
 
 Custo medido: **+86 ms (+5,5%)** e **+47%** em tokens por request.
+
+### Verificação da resposta
+
+Depois de gerar, duas checagens rodam **em código**, sem chamada extra ao modelo:
+
+| Checagem | O que pega |
+|---|---|
+| Números sem respaldo | Todo número afirmado precisa estar nas fontes, na pergunta, ou ser derivável (+ − × ÷) entre dois deles |
+| Citações inválidas | Todo `[n]` precisa apontar para uma fonte que existe |
+
+O que sobrar aparece no campo `unverified` da resposta e numa seção **"Não
+verificado"** do painel — em âmbar, como os avisos.
+
+Isso **não** torna alucinação impossível: nada torna. Torna uma classe dela
+impossível de passar calada — a figura fabricada e a referência inventada, que é
+a forma que uma afirmação falsa assume num produto onde toda resposta real é um
+número com uma fonte ao lado.
+
+**O que não pega, dito claramente:** raciocínio errado sobre números certos.
+`30 − 10 = 20` é aritmética válida sobre dois números que estavam nas fontes; só
+a premissa era falsa. Contra isso o que vale é ancorar o fato no corpus.
+
+Medido: **0 alertas** nas 26 perguntas do conjunto de avaliação, e 12 testes de
+unidade provando que o detector dispara quando deve — detector que nunca dispara
+é indistinguível de detector quebrado.
 
 ### MCP
 
@@ -288,22 +328,23 @@ estão em `eval/results/`.
 
 | | p50 | p95 | p99 | max |
 |---|---|---|---|---|
-| Todas as amostras | 1 680 ms | 3 350 ms | 4 591 ms | 4 591 ms |
-| **Excluindo requests degradados** (n=75) | **1 709 ms** | **3 350 ms** | **4 591 ms** | 4 591 ms |
+| Todas as amostras (n=78) | **1 921 ms** | **2 550 ms** | **5 988 ms** | 5 988 ms |
 
-O p50 sobe ao excluir os degradados porque uma falha de infraestrutura é
-**rápida**: ela aborta antes da geração. Contá-la junto puxa a mediana para
-baixo e faz o sistema parecer melhor do que é.
+Nesta execução **nenhum** request degradou, então não há segunda linha a
+reportar — as duas seriam idênticas. Execuções anteriores com throttling do
+provedor chegaram a 3,8%, e nesses casos os percentis limpos são reportados
+separadamente, porque uma cauda causada pelo provedor conta uma história
+diferente de uma cauda causada pelo agente.
 
 Por rota (p50 / p95):
 
 | Rota | p50 | p95 | Chamadas ao modelo |
 |---|---|---|---|
-| `outOfScope` (recusa) | 885 ms | 1 526 ms | **1** |
-| `meta` (sobre o assistente) | 920 ms | 1 638 ms | **1** |
-| `tool` | 1 523 ms | 2 550 ms | 2 |
-| `kb` | 1 831 ms | 3 517 ms | 2 |
-| `hybrid` | 2 312 ms | 3 350 ms | 2 |
+| `meta` (sobre o assistente) | 809 ms | 945 ms | **1** |
+| `outOfScope` (recusa) | 872 ms | 2 138 ms | **1** |
+| `tool` | 1 573 ms | 2 074 ms | 2 |
+| `kb` | 2 085 ms | 2 861 ms | 2 |
+| `hybrid` | 2 409 ms | 2 535 ms | 2 |
 
 As duas rotas de texto fixo custam **uma** chamada ao modelo — só a
 classificação — e são as mais baratas do sistema. Recusar e se apresentar são os
@@ -326,9 +367,9 @@ resta do prazo.
 | Prazo só no retry | 2 443 | 25 638 | 39 685 | 39 685 |
 | **Prazo aplicado ao timeout** | 2 225 | 15 005 | **15 016** | 15 016 |
 
-> **Sobre a taxa de falha.** Esta execução acusou **3,8%** (3 de 78) de requests
-> degradados; execuções feitas logo após outras, com centenas de chamadas em
-> pouco tempo, já chegaram a 45%. Isso é *throttling do tier gratuito* do Gemini depois de algumas
+> **Sobre a taxa de falha.** Esta execução acusou **0%**. Execuções feitas logo
+> após outras, com centenas de chamadas em pouco tempo, já chegaram a 45% — é
+> throttling do tier gratuito do Gemini, não comportamento do agente. Isso é *throttling do tier gratuito* do Gemini depois de algumas
 > centenas de chamadas em pouco tempo — não é comportamento do agente. Por isso
 > o relatório separa os percentis limpos: reportar uma cauda sem a taxa de falha
 > ao lado seria enganoso, porque uma cauda causada pelo provedor conta uma
@@ -381,7 +422,7 @@ npm run lint
 ```
 
 **A suíte inteira roda sem nenhuma credencial.** Verificado com o `.env`
-removido do disco e sem `GEMINI_API_KEY` no ambiente: 202/202 passam.
+removido do disco e sem `GEMINI_API_KEY` no ambiente: 238 testes, 231 passando e 7 pulados por exigirem Redis.
 
 Isso não é conveniência — é uma propriedade arquitetural. O modelo está atrás de
 uma porta (`ChatModelPort`), e os testes simplesmente sobem a aplicação com

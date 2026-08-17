@@ -279,6 +279,24 @@ O princípio é **degradar, não cair**. Cada nó decide explicitamente.
 Nenhum desses casos vira HTTP 500. Uma recusa é uma **resposta válida**, e o
 usuário recebe algo acionável.
 
+### Verificação determinística depois da geração
+
+Duas checagens em código, custo zero, no nó `generateAnswer`:
+
+- **Números sem respaldo** — todo número afirmado precisa aparecer nas fontes,
+  na pergunta, ou ser derivável por soma, subtração, multiplicação ou divisão
+  entre dois deles.
+- **Citações inválidas** — todo `[n]` precisa apontar para uma fonte existente.
+
+Reporta, não recusa. Um falso positivo que apaga resposta correta custa mais que
+um número sinalizado que o leitor confere no painel de evidência, que está na
+mesma tela. Se a precisão do detector subir com o uso, dá para endurecer;
+começar recusando seria endurecer sem dado.
+
+**O limite, explícito:** ele cobre a figura fabricada e a referência inventada.
+Não cobre inferência errada sobre números certos — para isso o remédio é ancorar
+o fato no corpus, e foi o que resolveu o caso do saldo de férias.
+
 ### Falha não é o mesmo que entrada incompleta
 
 Duas categorias distintas, em campos distintos da resposta:

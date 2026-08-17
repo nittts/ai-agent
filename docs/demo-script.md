@@ -1,7 +1,7 @@
 # Roteiro de demonstração
 
-8 perguntas no console (algumas com contrastes em duas partes) + 1 passo pelo
-MCP, ~18 minutos. Todas as perguntas vêm
+8 perguntas no console (algumas com contrastes em várias partes) + 1 passo pelo
+MCP, ~22 minutos. Todas as perguntas vêm
 de `eval/questions.json` — **o mesmo arquivo que alimenta o benchmark de
 latência**, então as perguntas demonstradas e as perguntas por trás do p50/p95
 são provadamente o mesmo conjunto.
@@ -202,6 +202,49 @@ precisa errar parecendo deliberado."*
 
 ---
 
+## 5e. Conversa que não é pergunta ⭐
+
+> **"salve assistente"** (primeiro contato) → apresentação completa
+> Depois de qualquer resposta: **"valeu, vou fazer isso"** → *"Boa! Qualquer
+> coisa de RH ou TI, é só chamar."*
+> E então: **"salve de novo"** → *"Opa! Em que posso ajudar?"*
+
+**Falar:** *"Nem toda mensagem é pergunta. Um cumprimento é cumprimentado, um
+agradecimento recebe um fecho, e o catálogo de capacidades só aparece no
+primeiro contato. Mas o detalhe que importa é onde essa decisão mora: o
+classificador diz o TIPO, e o que se faz com o tipo é código nosso, com teste
+próprio. Quando eu deleguei isso ao modelo, ele respondeu 'salve' com uma
+despedida — porque a palavra é ambígua e ele chutou. Escolha em que errar é
+grosseiro não se delega."*
+
+---
+
+## 5f. A verificação da própria resposta ⭐
+
+Não há pergunta a fazer aqui — é para apontar o painel.
+
+**Mostrar:** que a seção **"Não verificado"** está ausente em toda resposta da
+demo. Ela aparece quando a checagem determinística pós-geração encontra um
+número que não está nas fontes nem é derivável delas, ou uma citação `[n]`
+apontando para fonte inexistente.
+
+**Falar:** *"Depois de gerar, duas checagens rodam em código, sem chamada extra
+ao modelo. Elas não tornam alucinação impossível — nada torna. Tornam uma classe
+dela impossível de passar calada: a figura fabricada e a referência inventada,
+que é a forma que uma afirmação falsa assume num produto onde toda resposta real
+é um número com uma fonte ao lado.*
+
+*E digo o que ela NÃO pega: raciocínio errado sobre números certos. Trinta menos
+dez igual a vinte é aritmética válida sobre dois números que estavam mesmo nas
+fontes — só a premissa era falsa. Contra isso o que vale é ancorar o fato no
+corpus, e foi o que fiz quando esse caso apareceu.*
+
+*Medi: zero alertas nas 26 perguntas, e doze testes de unidade provando que o
+detector dispara quando deve. Detector que nunca dispara é indistinguível de
+detector quebrado."*
+
+---
+
 ## 6. Pede o dado em vez de inventar
 
 > **"Qual o saldo de férias?"** (sem informar a matrícula)
@@ -367,7 +410,7 @@ horizontal. Custo medido: p50 0,48 ms por request, contra um p50 de request de
 p99 de 51 s — causado pela **nossa** política de retry, não pelo provedor —
 e como o prazo total por request o trouxe para um teto real de 15 s.
 
-**Testes:** `npm test` → 202/202 verdes, **sem tocar em credencial nenhuma**:
+**Testes:** `npm test` → 231 verdes (7 pulados, exigem Redis), **sem tocar em credencial nenhuma**:
 `vitest.config.ts` fixa `LLM_PROVIDER=fake`, então nenhuma chave é lida mesmo
 com `.env` no disco. *"A suíte roda sem credencial porque o modelo está atrás de
 uma porta. Não há mock de módulo: os testes sobem a aplicação real com outra
