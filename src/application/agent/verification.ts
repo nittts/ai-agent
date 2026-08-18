@@ -84,3 +84,48 @@ export function verifyAnswer({
     invalidCitations,
   };
 }
+
+const OPERADORES: Record<string, (a: number, b: number) => number> = {
+  '-': (a, b) => a - b,
+  '−': (a, b) => a - b,
+  menos: (a, b) => a - b,
+  '+': (a, b) => a + b,
+  mais: (a, b) => a + b,
+  x: (a, b) => a * b,
+  '*': (a, b) => a * b,
+  '×': (a, b) => a * b,
+  vezes: (a, b) => a * b,
+  '/': (a, b) => (b === 0 ? NaN : a / b),
+  '÷': (a, b) => (b === 0 ? NaN : a / b),
+};
+
+const CONTA = new RegExp(
+  String.raw`(\d[\d.,]*)[^\d=]{0,45}?(−|×|÷|[-+*/x]|menos|mais|vezes)[^\d=]{0,45}?(\d[\d.,]*)[^\d=]{0,45}?=[^\d]{0,25}?(\d[\d.,]*)`,
+  'gi',
+);
+
+function paraNumero(bruto: string): number {
+  const limpo = bruto.replace(/\.(?=\d{3}\b)/g, '').replace(',', '.').replace(/[.,]$/, '');
+  return Number(limpo);
+}
+
+export function checkArithmetic(answer: string): string[] {
+  const erradas: string[] = [];
+
+  for (const [, a, op, b, resultado] of answer.matchAll(CONTA)) {
+    const calcular = OPERADORES[op.toLowerCase()];
+    if (!calcular) continue;
+
+    const [x, y, z] = [paraNumero(a), paraNumero(b), paraNumero(resultado)];
+    if (![x, y, z].every(Number.isFinite)) continue;
+
+    const esperado = calcular(x, y);
+    if (!Number.isFinite(esperado)) continue;
+
+    if (Math.abs(esperado - z) > DERIVATION_TOLERANCE) {
+      erradas.push(`${a} ${op} ${b} = ${resultado}`);
+    }
+  }
+
+  return erradas;
+}

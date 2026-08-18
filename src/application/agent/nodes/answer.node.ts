@@ -1,6 +1,6 @@
 import type { AgentStateType } from '../agent-state';
 import { ANSWER_SYSTEM_PROMPT, buildAnswerPrompt, buildContext, REFUSAL_MESSAGES } from '../prompts';
-import { verifyAnswer } from '../verification';
+import { checkArithmetic, verifyAnswer } from '../verification';
 import { withRetry, remainingBudget } from '../../../shared/resilience';
 import {
   budgetLeft,
@@ -78,6 +78,10 @@ export function createAnswerNode(ctx: NodeContext) {
           unverified.push(
             `números sem respaldo nas fontes: ${check.unsupportedFigures.join(', ')}`,
           );
+        }
+        const contasErradas = checkArithmetic(text);
+        if (contasErradas.length > 0) {
+          unverified.push(`contas que não fecham: ${contasErradas.join('; ')}`);
         }
         if (check.invalidCitations.length > 0) {
           unverified.push(
