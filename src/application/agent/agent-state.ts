@@ -82,6 +82,12 @@ export const AgentState = Annotation.Root({
     default: () => [],
   }),
 
+  /** Trava: a busca ampliada roda no máximo uma vez, e o ciclo termina. */
+  retried: Annotation<boolean>({
+    reducer: (current, next) => current || next,
+    default: () => false,
+  }),
+
   recordNotFound: Annotation<boolean>({
     reducer: (current, next) => current || next,
     default: () => false,

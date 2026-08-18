@@ -15,7 +15,15 @@ export function createGradeNode(ctx: NodeContext) {
         state.documents.length > 0 && state.bestScore >= ctx.settings.minScore;
       const hasApiData = state.toolResults.length > 0;
 
-      if (hasRelevantDocs || hasApiData) return {};
+      /*
+        Limpa a recusa EXPLICITAMENTE.
+
+        Na segunda passagem o estado ja carrega refused=true da primeira, e o
+        reducer de sobrescrita nao volta atras sozinho: devolver {} deixaria a
+        recusa de pe mesmo tendo encontrado o trecho. Achar a informacao na
+        segunda tentativa e inutil se ninguem desfizer a primeira decisao.
+      */
+      if (hasRelevantDocs || hasApiData) return { refused: false, refusalReason: null };
 
       return { refused: true, refusalReason: decideReason(state, ctx) };
     });

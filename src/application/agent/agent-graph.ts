@@ -18,6 +18,7 @@ export function buildAgentGraph(ctx: NodeContext) {
     .addNode('generateAnswer', createAnswerNode(ctx))
     .addNode('refuse', createRefuseNode())
     .addNode('meta', createMetaNode())
+    .addNode('retrieveAgain', createRetrieveNode(ctx, 3, 'retrieveAgain'))
 
     .addEdge(START, 'classify')
 
@@ -47,11 +48,28 @@ export function buildAgentGraph(ctx: NodeContext) {
     .addEdge('retrieve', 'grade')
     .addEdge('callHrApi', 'grade')
 
+    /**
+     * Uma segunda tentativa, e só uma.
+     *
+     * "Não encontrei" costuma significar "o trecho certo ficou na posição 6",
+     * não "a informação não existe". Antes de recusar por falta de
+     * fundamentação, a busca roda de novo com alcance maior — mesmo limiar.
+     *
+     * O ciclo é fechado pela trava `retried`, e o custo cai INTEIRO no caminho
+     * da falha: quem já ia sair sem resposta paga um embedding a mais, e o p95
+     * de quem seria atendido não muda. Recusa por qualquer outro motivo não
+     * tenta de novo — não adianta buscar mais fundo quando falta a matrícula.
+     */
     .addConditionalEdges(
       'grade',
-      (state: AgentStateType) => (state.refused ? 'refuse' : 'generateAnswer'),
-      ['generateAnswer', 'refuse'],
+      (state: AgentStateType) => {
+        if (!state.refused) return 'generateAnswer';
+        if (state.refusalReason === 'notGrounded' && !state.retried) return 'retrieveAgain';
+        return 'refuse';
+      },
+      ['generateAnswer', 'refuse', 'retrieveAgain'],
     )
+    .addEdge('retrieveAgain', 'grade')
 
     .addEdge('generateAnswer', END)
     .addEdge('refuse', END)

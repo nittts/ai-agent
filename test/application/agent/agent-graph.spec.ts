@@ -150,6 +150,27 @@ describe('agent graph', () => {
     expect(state.facts.employeeId).toBe(1042);
   });
 
+  /*
+    Segunda tentativa: "nao encontrei" costuma ser "ficou na posicao 6".
+    A busca amplia o ALCANCE, nunca afrouxa o limiar — e a trava garante que o
+    ciclo roda no maximo uma vez.
+  */
+  it('a busca ampliada roda no máximo uma vez', async () => {
+    const state = await run('Qual o valor do auxílio home-office?');
+
+    // Sem necessidade de reforço, a segunda busca nem acontece.
+    expect(state.retried).toBe(false);
+    expect(state.timings.retrieveAgain).toBeUndefined();
+  });
+
+  it('uma recusa que não é falta de fundamentação não tenta de novo', async () => {
+    const state = await run('Qual o saldo de férias?');
+
+    expect(state.refusalReason).toBe('missingIdentification');
+    expect(state.retried).toBe(false);
+    expect(state.timings.retrieveAgain).toBeUndefined();
+  });
+
   it('kb route: answers from a document and cites the source', async () => {
     const state = await run('Quantos dias de férias eu tenho direito por ano?');
 
