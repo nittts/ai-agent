@@ -8,7 +8,14 @@ import type { CachePort } from '../ports/cache.port';
 import type { HrDirectoryPort } from '../ports/hr-directory.port';
 import { buildAgentGraph } from '../agent/agent-graph';
 import type { AgentStateType } from '../agent/agent-state';
-import { sanitiseHistory, sanitiseFacts, type ConversationTurn, type SessionFacts } from '../../domain/conversation';
+import {
+  sanitiseHistory,
+  sanitiseFacts,
+  sanitiseAction,
+  type ConversationTurn,
+  type PendingAction,
+  type SessionFacts,
+} from '../../domain/conversation';
 
 export interface AnswerQuestionSettings {
   topK: number;
@@ -28,6 +35,14 @@ export interface AskOptions {
   history?: readonly ConversationTurn[];
   /** Fatos da sessão (matrícula), fora da janela de histórico. */
   facts?: SessionFacts;
+
+  /**
+   * A ação proposta no turno anterior, devolvida pelo cliente para confirmar.
+   *
+   * Presente, ela é EXECUTADA e o modelo não é chamado — nem para classificar,
+   * nem para redigir. Confirmar não é uma pergunta a ser interpretada.
+   */
+  confirmAction?: unknown;
 }
 
 export interface Timings {
@@ -51,6 +66,9 @@ export interface AnswerResult {
   notes: string[];
   refused: boolean;
   refusalReason: RefusalReason | null;
+
+  /** Ação proposta e aguardando confirmação; `null` quando não há nenhuma. */
+  pendingAction: PendingAction | null;
 
   /** Figures and citations the post-generation check could not back. */
   unverified: string[];
@@ -105,6 +123,16 @@ export class AnswerQuestionUseCase {
     const history = sanitiseHistory(options.history ?? []);
     const facts = sanitiseFacts(options.facts);
 
+    /*
+      CONFIRMACAO: caminho curto, deterministico, sem modelo nenhum.
+
+      A acao executada e a que foi mostrada na tela, byte a byte — o "sim" nao
+      volta ao classificador. Se voltasse, um pedido ambiguo poderia executar
+      algo diferente do que a pessoa leu e aprovou.
+    */
+    const confirmada = sanitiseAction(options.confirmAction);
+    if (confirmada) return this.executeAction(confirmada, start, facts);
+
     const key = answerCacheKey(question, this.model.modelName, this.vectorStore.corpusVersion());
     const isFollowUp = history.length > 0;
 
@@ -122,6 +150,7 @@ export class AnswerQuestionUseCase {
 
           interpretedAs: null,
           unverified: [],
+          pendingAction: null,
           facts,
           cache: 'HIT',
           timings: { totalMs: Date.now() - start, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
@@ -180,6 +209,54 @@ export class AnswerQuestionUseCase {
     );
   }
 
+  private async executeAction(
+    action: PendingAction,
+    start: number,
+    facts: SessionFacts,
+  ): Promise<AnswerResult> {
+    const vazio = {
+      route: 'action' as const,
+      refused: false,
+      refusalReason: null,
+      pendingAction: null,
+      unverified: [],
+      interpretedAs: null,
+      notes: [],
+      facts,
+      cache: 'OFF' as const,
+      cost: { inputTokens: 0, outputTokens: 0, usd: 0 },
+      timings: { totalMs: 0, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
+    };
+
+    try {
+      const { data, source } = await this.hr.openTicket(action);
+
+      return {
+        ...vazio,
+        answer:
+          `Pronto — chamado ${data.id} aberto.\n\n` +
+          `- Assunto: ${data.title}\n` +
+          `- Prazo de atendimento: ${data.slaBusinessDays} dias úteis\n\n` +
+          `Você pode acompanhar perguntando "qual o status do chamado ${data.id}?".`,
+        sources: [source],
+        degraded: false,
+        warnings: [],
+        timings: { ...vazio.timings, totalMs: Date.now() - start },
+      };
+    } catch (error) {
+      return {
+        ...vazio,
+        answer:
+          'Não consegui abrir o chamado agora — o sistema de RH não respondeu. ' +
+          'Nada foi registrado, então pode tentar de novo sem risco de duplicar.',
+        sources: [],
+        degraded: true,
+        warnings: [`falha ao abrir chamado: ${error instanceof Error ? error.message : error}`],
+        timings: { ...vazio.timings, totalMs: Date.now() - start },
+      };
+    }
+  }
+
   private toResult(state: AgentStateType, start: number): AnswerResult {
     const timings = state.timings ?? {};
 
@@ -192,6 +269,7 @@ export class AnswerQuestionUseCase {
       notes: state.notes,
       refused: state.refused,
       refusalReason: state.refusalReason,
+      pendingAction: state.pendingAction,
       unverified: state.unverified,
       facts: state.facts,
 

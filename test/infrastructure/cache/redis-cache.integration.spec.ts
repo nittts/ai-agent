@@ -63,6 +63,10 @@ class FakeHrDirectory implements HrDirectoryPort {
   hoursBank(id: number) {
     return this.respond(`GET /employees/${id}/hours-bank`, hoursBanks[id], 'Employee', id);
   }
+  openTicket(): never {
+    throw new Error('este teste não abre chamados');
+  }
+
   ticket(id: number) {
     return this.respond(`GET /tickets/${id}`, tickets[id], 'Ticket', id);
   }

@@ -45,6 +45,27 @@ class FakeHrDirectory implements HrDirectoryPort {
   hoursBank(id: number) {
     return this.respond(`GET /employees/${id}/hours-bank`, hoursBanks[id], 'Employee', id);
   }
+  public abertos: { employeeId: number; category: string; title: string }[] = [];
+
+  openTicket(input: { employeeId: number; category: 'access' | 'equipment' | 'software'; title: string }) {
+    this.abertos.push(input);
+    if (this.failure === 'all') throw new Error('HR system unavailable');
+
+    return Promise.resolve({
+      data: {
+        id: 9999,
+        employeeId: input.employeeId,
+        category: input.category,
+        status: 'open' as const,
+        title: input.title,
+        openedAt: new Date(0).toISOString(),
+        slaBusinessDays: 3,
+        resolvedAt: null,
+      },
+      source: { kind: 'api' as const, endpoint: 'POST /tickets', fields: [], latencyMs: 4 },
+    });
+  }
+
   ticket(id: number) {
     return this.respond(`GET /tickets/${id}`, tickets[id], 'Ticket', id);
   }
@@ -169,6 +190,31 @@ describe('agent graph', () => {
     expect(state.refusalReason).toBe('missingIdentification');
     expect(state.retried).toBe(false);
     expect(state.timings.retrieveAgain).toBeUndefined();
+  });
+
+  /*
+    A garantia que mais importa nesta rota: PROPOR NAO ESCREVE.
+
+    O no de acao nao toca a porta de escrita. Quem escreve e o caso de uso, no
+    turno seguinte, a partir da proposta devolvida pelo cliente.
+  */
+  it('a rota de ação propõe sem abrir nada', async () => {
+    const state = await runWithFacts('abre um chamado, minha VPN não conecta', { employeeId: 1042 });
+
+    expect(state.route).toBe('action');
+    expect(state.refused).toBe(false);
+    expect(state.pendingAction).toMatchObject({ kind: 'open_ticket', employeeId: 1042 });
+    expect(state.answer).toMatch(/confirma/i);
+    expect(hr.abertos).toEqual([]);
+  });
+
+  it('sem matrícula, pede a matrícula em vez de propor', async () => {
+    const state = await runWithFacts('abre um chamado, minha VPN não conecta', {});
+
+    expect(state.refused).toBe(true);
+    expect(state.refusalReason).toBe('missingIdentification');
+    expect(state.pendingAction).toBeNull();
+    expect(hr.abertos).toEqual([]);
   });
 
   it('kb route: answers from a document and cites the source', async () => {

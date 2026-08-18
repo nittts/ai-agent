@@ -7,6 +7,7 @@ import { createGradeNode } from './nodes/grade.node';
 import { createAnswerNode } from './nodes/answer.node';
 import { createRefuseNode } from './nodes/refuse.node';
 import { createMetaNode } from './nodes/meta.node';
+import { createProposeActionNode } from './nodes/propose-action.node';
 import type { NodeContext } from './nodes/node-context';
 
 export function buildAgentGraph(ctx: NodeContext) {
@@ -19,6 +20,7 @@ export function buildAgentGraph(ctx: NodeContext) {
     .addNode('refuse', createRefuseNode())
     .addNode('meta', createMetaNode())
     .addNode('retrieveAgain', createRetrieveNode(ctx, 3, 'retrieveAgain'))
+    .addNode('proposeAction', createProposeActionNode())
 
     .addEdge(START, 'classify')
 
@@ -34,6 +36,8 @@ export function buildAgentGraph(ctx: NodeContext) {
 
           case 'unresolvedFollowUp':
             return ['refuse'];
+          case 'action':
+            return ['proposeAction'];
           case 'kb':
             return ['retrieve'];
           case 'tool':
@@ -42,7 +46,7 @@ export function buildAgentGraph(ctx: NodeContext) {
             return ['retrieve', 'callHrApi'];
         }
       },
-      ['retrieve', 'callHrApi', 'refuse', 'meta'],
+      ['retrieve', 'callHrApi', 'refuse', 'meta', 'proposeAction'],
     )
 
     .addEdge('retrieve', 'grade')
@@ -73,7 +77,8 @@ export function buildAgentGraph(ctx: NodeContext) {
 
     .addEdge('generateAnswer', END)
     .addEdge('refuse', END)
-    .addEdge('meta', END);
+    .addEdge('meta', END)
+    .addEdge('proposeAction', END);
 
   return graph.compile();
 }

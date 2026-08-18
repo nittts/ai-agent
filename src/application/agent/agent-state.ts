@@ -1,20 +1,26 @@
 import { Annotation } from '@langchain/langgraph';
 import { z } from 'zod';
 import type { Route, RefusalReason, Source } from '../../domain/answer';
-import { mergeFacts, type ConversationTurn, type SessionFacts } from '../../domain/conversation';
+import {
+  mergeFacts,
+  type ConversationTurn,
+  type PendingAction,
+  type SessionFacts,
+} from '../../domain/conversation';
 import type { SearchResult } from '../../domain/knowledge';
 import { addUsage, ZERO_USAGE, type TokenUsage } from '../../domain/cost';
 import { TOOL_NAMES, type ToolResult } from './tools';
 
 export const classificationSchema = z.object({
   route: z
-    .enum(['kb', 'tool', 'hybrid', 'outOfScope', 'meta', 'unresolvedFollowUp'])
+    .enum(['kb', 'tool', 'hybrid', 'outOfScope', 'meta', 'unresolvedFollowUp', 'action'])
     .describe(
       'kb: answerable from internal policy alone. tool: needs the employee’s own data. ' +
         'hybrid: needs BOTH a policy rule and personal data. ' +
         'meta: about the assistant itself — a greeting, or what it can do. ' +
         'outOfScope: not an HR/IT topic. ' +
-        'unresolvedFollowUp: refers to an earlier turn that is missing or unusable.',
+        'unresolvedFollowUp: refers to an earlier turn that is missing or unusable. ' +
+        'action: the person wants something DONE — open a ticket, request something — not answered.',
     ),
 
   metaKind: z
@@ -25,6 +31,16 @@ export const classificationSchema = z.object({
         '"closing" for thanks or sign-off AFTER something was answered; ' +
         '"about" when asking who the assistant is or what it does.',
     ),
+
+  actionCategory: z
+    .enum(['access', 'equipment', 'software'])
+    .optional()
+    .describe('Only for the action route: which ticket category the request belongs to.'),
+
+  actionTitle: z
+    .string()
+    .optional()
+    .describe('Only for the action route: a short title for the ticket, in Portuguese.'),
 
   standaloneQuestion: z
     .string()
@@ -86,6 +102,12 @@ export const AgentState = Annotation.Root({
   retried: Annotation<boolean>({
     reducer: (current, next) => current || next,
     default: () => false,
+  }),
+
+  /** Ação proposta e ainda não executada; o cliente devolve para confirmar. */
+  pendingAction: Annotation<PendingAction | null>({
+    reducer: (_current, next) => next,
+    default: () => null,
   }),
 
   recordNotFound: Annotation<boolean>({

@@ -59,7 +59,7 @@ export class AskController {
   @Post()
   @HttpCode(HttpStatus.OK)
   async ask(
-    @Body() body: { question?: unknown; bypassCache?: unknown; history?: unknown; facts?: unknown },
+    @Body() body: { question?: unknown; bypassCache?: unknown; history?: unknown; facts?: unknown; confirmAction?: unknown },
   ): Promise<AskResponse> {
     const correlationId = currentCorrelationId() ?? newCorrelationId();
 
@@ -67,6 +67,7 @@ export class AskController {
       bypassCache: body?.bypassCache === true,
       history: validateHistory(body?.history),
       facts: sanitiseFacts(body?.facts),
+      confirmAction: body?.confirmAction,
     });
 
     return { ...result, correlationId };
@@ -87,7 +88,7 @@ export class AskController {
 
   @Post('stream')
   async streamPost(
-    @Body() body: { question?: unknown; history?: unknown; facts?: unknown },
+    @Body() body: { question?: unknown; history?: unknown; facts?: unknown; confirmAction?: unknown },
     @Res() reply: FastifyReply,
   ): Promise<void> {
     let question: string;

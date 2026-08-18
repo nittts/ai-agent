@@ -51,6 +51,20 @@ export interface HrDirectoryPort {
   benefits(employeeId: number): Promise<HrResponse<Benefits>>;
   hoursBank(employeeId: number): Promise<HrResponse<HoursBank>>;
   ticket(ticketId: number): Promise<HrResponse<Ticket>>;
+
+  /**
+   * A unica ESCRITA da porta.
+   *
+   * Nao e chamada por inferencia: o agente propoe, o cliente devolve a proposta
+   * e so entao isto executa. Abrir chamado por engano e pior que nao abrir.
+   */
+  openTicket(input: OpenTicketInput): Promise<{ data: Ticket; source: ApiSource }>;
+}
+
+export interface OpenTicketInput {
+  employeeId: number;
+  category: (typeof TICKET_CATEGORIES)[number];
+  title: string;
 }
 
 export const HR_DIRECTORY = Symbol('HR_DIRECTORY');

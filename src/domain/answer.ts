@@ -6,6 +6,14 @@ export const ROUTES = [
   'meta',
 
   'unresolvedFollowUp',
+  /**
+   * O usuário quer que algo SEJA FEITO, não perguntado.
+   *
+   * Esta rota nunca escreve: ela propõe. A escrita acontece no turno seguinte,
+   * a partir da proposta devolvida pelo cliente — abrir chamado por engano é
+   * pior do que não abrir.
+   */
+  'action',
 ] as const;
 export type Route = (typeof ROUTES)[number];
 

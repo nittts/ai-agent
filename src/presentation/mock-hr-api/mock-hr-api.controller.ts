@@ -17,6 +17,14 @@ import { ENV } from '../../infrastructure/config/config.module';
 import type { Env } from '../../infrastructure/config/env';
 import { ChaosService, CHAOS_MODES, type ChaosMode } from './chaos.service';
 import { benefits, hoursBanks, tickets, vacationBalances } from './seed';
+import { TICKET_CATEGORIES, type Ticket } from '../../application/ports/hr-directory.port';
+
+/** Os mesmos prazos que a política publica em acesso-ti.md § Chamados e SLA. */
+const SLA_POR_CATEGORIA: Record<Ticket['category'], number> = {
+  access: 3,
+  software: 5,
+  equipment: 10,
+};
 
 @Controller('mock/v1')
 export class MockHrApiController {
@@ -72,6 +80,47 @@ export class MockHrApiController {
   async ticket(@Param('id', ParseIntPipe) id: number) {
     await this.applyChaos();
     return tickets[id] ?? this.notFound('Ticket', id);
+  }
+
+  /**
+   * A unica escrita da API simulada.
+   *
+   * Gera id sequencial acima do maior existente e devolve o chamado criado,
+   * para que a resposta possa citar o numero — sem numero, "abri seu chamado"
+   * e uma afirmacao que o usuario nao consegue conferir.
+   */
+  @Post('tickets')
+  @HttpCode(HttpStatus.CREATED)
+  async openTicket(
+    @Body() body: { employeeId?: number; category?: string; title?: string },
+  ): Promise<Ticket> {
+    await this.applyChaos();
+
+    const employeeId = Number(body?.employeeId);
+    const category = String(body?.category ?? '');
+    const title = String(body?.title ?? '').trim();
+
+    if (!Number.isInteger(employeeId) || !TICKET_CATEGORIES.includes(category as never) || !title) {
+      throw new BadRequestException({
+        error: 'invalid_ticket',
+        message: `employeeId, title and category (${TICKET_CATEGORIES.join(', ')}) are required.`,
+      });
+    }
+
+    const id = Math.max(...Object.keys(tickets).map(Number)) + 1;
+    const criado: Ticket = {
+      id,
+      employeeId,
+      category: category as Ticket['category'],
+      status: 'open',
+      title,
+      openedAt: new Date().toISOString(),
+      slaBusinessDays: SLA_POR_CATEGORIA[category as Ticket['category']],
+      resolvedAt: null,
+    };
+
+    tickets[id] = criado;
+    return criado;
   }
 
   @Get('_chaos')

@@ -39,6 +39,9 @@ const hrStub: HrDirectoryPort = {
   benefits: () => Promise.reject(new Error('not used')),
   hoursBank: () => Promise.reject(new Error('not used')),
   ticket: () => Promise.reject(new Error('not used')),
+    openTicket: () => {
+      throw new Error('este teste não abre chamados');
+    },
 };
 
 describe('request deadline', () => {

@@ -13,6 +13,7 @@ import {
   type HrResponse,
   type Ticket,
   type VacationBalance,
+  type OpenTicketInput,
 } from '../../application/ports/hr-directory.port';
 import { withRetry, withTimeout } from '../../shared/resilience';
 
@@ -113,6 +114,43 @@ export class HttpHrDirectory implements HrDirectoryPort {
     return {
       data,
       source: { kind: 'api', endpoint, fields: [], latencyMs: Date.now() - start },
+    };
+  }
+
+  /**
+   * A unica escrita do adaptador, e ela NAO tem retry.
+   *
+   * Reenviar um POST que talvez tenha funcionado abre dois chamados para o
+   * mesmo pedido — e o usuario so descobre depois. Sem idempotency key do lado
+   * do RH, falhar uma vez e avisar e melhor que tentar de novo as cegas.
+   */
+  async openTicket(input: OpenTicketInput): Promise<HrResponse<Ticket>> {
+    const endpoint = 'POST /tickets';
+    const start = Date.now();
+
+    const response = await withTimeout(
+      fetch(`${this.env.HR_API_BASE_URL}/tickets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+      this.env.TOOL_TIMEOUT_MS,
+    );
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status} on ${endpoint}`) as Error & { status: number };
+      error.status = response.status;
+      throw error;
+    }
+
+    const parsed = ticketSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new ContractViolationError(endpoint, 'resposta de criação fora do contrato');
+    }
+
+    return {
+      data: parsed.data,
+      source: { kind: 'api', endpoint, fields: ['id', 'status', 'slaBusinessDays'], latencyMs: Date.now() - start },
     };
   }
 

@@ -1,7 +1,7 @@
 import type { Route, RefusalReason, Source, DocumentSource, ApiSource } from '../../domain/answer';
-import type { ConversationTurn, SessionFacts } from '../../domain/conversation';
+import type { ConversationTurn, PendingAction, SessionFacts } from '../../domain/conversation';
 
-export type { Route, RefusalReason, Source, DocumentSource, ApiSource, ConversationTurn, SessionFacts };
+export type { Route, RefusalReason, Source, DocumentSource, ApiSource, ConversationTurn, SessionFacts, PendingAction };
 
 export interface Cost {
   inputTokens: number;
@@ -35,6 +35,14 @@ export interface AskRequest {
    * três trocas. A resposta devolve `facts` atualizado para o cliente guardar.
    */
   facts?: SessionFacts;
+
+  /**
+   * A ação proposta no turno anterior, devolvida INTACTA para confirmar.
+   *
+   * Enviada, ela é executada sem passar pelo modelo. O que roda é o que a
+   * pessoa leu na tela — confirmar não reabre a interpretação.
+   */
+  confirmAction?: PendingAction;
 }
 
 export interface AskResponse {
@@ -60,6 +68,9 @@ export interface AskResponse {
 
   /** Fatos aprendidos; o cliente guarda e reenvia no próximo request. */
   facts: SessionFacts;
+
+  /** Ação aguardando confirmação. O cliente devolve em `confirmAction`. */
+  pendingAction: PendingAction | null;
 
   refused: boolean;
   refusalReason: RefusalReason | null;

@@ -104,6 +104,21 @@ export class FakeChatModel implements ChatModelPort {
       return { route: 'meta', standaloneQuestion, reason: 'about the assistant itself' };
     }
 
+    /*
+      O fake so diz QUE e acao. Categoria e titulo sao julgamento de linguagem,
+      e a tabela de decisao trata a ausencia deles pedindo mais detalhe.
+    */
+    if (/\b(abrir?|abre|abra|registrar?|solicit\w*)\s+(um\s+)?(chamado|ticket)\b/.test(t)) {
+      return {
+        route: 'action',
+        standaloneQuestion,
+        actionCategory: 'access',
+        actionTitle: standaloneQuestion.slice(0, 60),
+        tools: [],
+        ...(employeeId ? { employeeId: Number(employeeId) } : {}),
+      };
+    }
+
     const personalMarker =
       /(meu saldo|meus beneficios|beneficios ativos|meu banco de horas|saldo de ferias|saldo do banco|status do chamado|ja foi resolvido|quantas horas eu tenho|meu plano)/.test(
         t,
