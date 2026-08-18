@@ -14,7 +14,12 @@ import type { FastifyReply } from 'fastify';
 import { AnswerQuestionUseCase } from '../../application/use-cases/answer-question.use-case';
 import { currentCorrelationId, newCorrelationId } from '../../infrastructure/observability/logger';
 import type { AskResponse, SseEvent } from './api-contract';
-import { sanitiseHistory, type ConversationTurn } from '../../domain/conversation';
+import {
+  sanitiseHistory,
+  sanitiseFacts,
+  type ConversationTurn,
+  type SessionFacts,
+} from '../../domain/conversation';
 
 const MAX_QUESTION_LENGTH = 2_000;
 
@@ -54,13 +59,14 @@ export class AskController {
   @Post()
   @HttpCode(HttpStatus.OK)
   async ask(
-    @Body() body: { question?: unknown; bypassCache?: unknown; history?: unknown },
+    @Body() body: { question?: unknown; bypassCache?: unknown; history?: unknown; facts?: unknown },
   ): Promise<AskResponse> {
     const correlationId = currentCorrelationId() ?? newCorrelationId();
 
     const result = await this.answerQuestion.execute(validateQuestion(body?.question), {
       bypassCache: body?.bypassCache === true,
       history: validateHistory(body?.history),
+      facts: sanitiseFacts(body?.facts),
     });
 
     return { ...result, correlationId };
@@ -76,12 +82,12 @@ export class AskController {
       return;
     }
 
-    await this.streamAnswer(question, [], reply);
+    await this.streamAnswer(question, [], reply, {});
   }
 
   @Post('stream')
   async streamPost(
-    @Body() body: { question?: unknown; history?: unknown },
+    @Body() body: { question?: unknown; history?: unknown; facts?: unknown },
     @Res() reply: FastifyReply,
   ): Promise<void> {
     let question: string;
@@ -92,13 +98,14 @@ export class AskController {
       return;
     }
 
-    await this.streamAnswer(question, validateHistory(body?.history), reply);
+    await this.streamAnswer(question, validateHistory(body?.history), reply, sanitiseFacts(body?.facts));
   }
 
   private async streamAnswer(
     question: string,
     history: ConversationTurn[],
     reply: FastifyReply,
+    facts: SessionFacts,
   ): Promise<void> {
     const correlationId = currentCorrelationId() ?? newCorrelationId();
 
@@ -125,6 +132,7 @@ export class AskController {
     try {
       const result = await this.answerQuestion.execute(question, {
         history,
+        facts,
         onToken: (token) => {
           ttftMs ??= Date.now() - start;
           send({ type: 'token', text: token });

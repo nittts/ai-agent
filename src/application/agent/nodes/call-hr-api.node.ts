@@ -34,7 +34,11 @@ export function createCallHrApiNode(ctx: NodeContext) {
 
       if (requested.length === 0) return {};
 
-      const employeeId = classification?.employeeId;
+      /*
+        A matricula pode vir da pergunta OU da sessao. A da pergunta ganha, para
+        que "e do colaborador 9999?" nao seja respondida com o id anterior.
+      */
+      const employeeId = classification?.employeeId ?? state.facts.employeeId;
       const ticketId = classification?.ticketId;
 
       const executions = requested.map(async (name) => {

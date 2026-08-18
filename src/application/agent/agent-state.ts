@@ -1,7 +1,7 @@
 import { Annotation } from '@langchain/langgraph';
 import { z } from 'zod';
 import type { Route, RefusalReason, Source } from '../../domain/answer';
-import type { ConversationTurn } from '../../domain/conversation';
+import { mergeFacts, type ConversationTurn, type SessionFacts } from '../../domain/conversation';
 import type { SearchResult } from '../../domain/knowledge';
 import { addUsage, ZERO_USAGE, type TokenUsage } from '../../domain/cost';
 import { TOOL_NAMES, type ToolResult } from './tools';
@@ -53,6 +53,19 @@ export type Classification = z.infer<typeof classificationSchema>;
 
 export const AgentState = Annotation.Root({
   question: Annotation<string>,
+
+  /*
+    Fatos da SESSAO, nao da conversa.
+
+    A matricula informada uma vez nao e um turno: e um fato que vale enquanto a
+    sessao durar. Guarda-la no historico a fazia expirar junto com a janela de 6
+    turnos — "use esse id daqui em diante" parava de valer depois de duas
+    perguntas sobre outro assunto, que foi o defeito relatado.
+  */
+  facts: Annotation<SessionFacts>({
+    reducer: (current, next) => mergeFacts(current, next),
+    default: () => ({}),
+  }),
 
   history: Annotation<ConversationTurn[]>({
     reducer: (_current, next) => next,

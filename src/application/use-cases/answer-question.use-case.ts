@@ -8,7 +8,7 @@ import type { CachePort } from '../ports/cache.port';
 import type { HrDirectoryPort } from '../ports/hr-directory.port';
 import { buildAgentGraph } from '../agent/agent-graph';
 import type { AgentStateType } from '../agent/agent-state';
-import { sanitiseHistory, type ConversationTurn } from '../../domain/conversation';
+import { sanitiseHistory, sanitiseFacts, type ConversationTurn, type SessionFacts } from '../../domain/conversation';
 
 export interface AnswerQuestionSettings {
   topK: number;
@@ -26,6 +26,8 @@ export interface AskOptions {
   bypassCache?: boolean;
 
   history?: readonly ConversationTurn[];
+  /** Fatos da sessão (matrícula), fora da janela de histórico. */
+  facts?: SessionFacts;
 }
 
 export interface Timings {
@@ -52,6 +54,8 @@ export interface AnswerResult {
 
   /** Figures and citations the post-generation check could not back. */
   unverified: string[];
+  /** Fatos aprendidos nesta interação — o cliente guarda e reenvia. */
+  facts: SessionFacts;
 
   interpretedAs: string | null;
   cache: 'HIT' | 'MISS' | 'OFF';
@@ -99,6 +103,7 @@ export class AnswerQuestionUseCase {
   async execute(question: string, options: AskOptions = {}): Promise<AnswerResult> {
     const start = Date.now();
     const history = sanitiseHistory(options.history ?? []);
+    const facts = sanitiseFacts(options.facts);
 
     const key = answerCacheKey(question, this.model.modelName, this.vectorStore.corpusVersion());
     const isFollowUp = history.length > 0;
@@ -117,6 +122,7 @@ export class AnswerQuestionUseCase {
 
           interpretedAs: null,
           unverified: [],
+          facts,
           cache: 'HIT',
           timings: { totalMs: Date.now() - start, ttftMs: null, retrievalMs: null, llmMs: null, perNode: null },
 
@@ -136,7 +142,7 @@ export class AnswerQuestionUseCase {
       onToken: options.onToken,
     });
 
-    const finalState = (await graph.invoke({ question, history })) as AgentStateType;
+    const finalState = (await graph.invoke({ question, history, facts })) as AgentStateType;
     const result = this.toResult(finalState, start);
 
     const writeKey = isFollowUp
@@ -187,6 +193,7 @@ export class AnswerQuestionUseCase {
       refused: state.refused,
       refusalReason: state.refusalReason,
       unverified: state.unverified,
+      facts: state.facts,
 
       interpretedAs:
         state.standaloneQuestion && state.standaloneQuestion !== state.question

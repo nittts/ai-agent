@@ -98,6 +98,16 @@ describe('agent graph', () => {
       onToken,
     }).invoke({ question }) as Promise<AgentStateType>;
 
+  const runWithFacts = (question: string, facts: { employeeId?: number }) =>
+    buildAgentGraph({
+      model,
+      embeddings,
+      vectorStore: store,
+      hr,
+      settings: { topK: 4, minScore: 0.18, llmTimeoutMs: 8_000, llmMaxRetries: 2 },
+      deadline: Date.now() + 15_000,
+    }).invoke({ question, facts }) as Promise<AgentStateType>;
+
   const runWithHistory = (question: string, history: ConversationTurn[]) =>
     buildAgentGraph({
       model,
@@ -107,6 +117,38 @@ describe('agent graph', () => {
       settings: { topK: 4, minScore: 0.18, llmTimeoutMs: 8_000, llmMaxRetries: 2 },
       deadline: Date.now() + 15_000,
     }).invoke({ question, history }) as Promise<AgentStateType>;
+
+  /*
+    A matricula e fato da SESSAO, nao turno. Guarda-la no historico a fazia
+    expirar com a janela de 6 turnos, e quem dizia "use esse id daqui em diante"
+    voltava a ouvir "preciso da sua matricula" duas perguntas depois.
+  */
+  it('usa a matrícula da sessão quando a pergunta não a repete', async () => {
+    const state = await runWithFacts('e meu banco de horas?', { employeeId: 1042 });
+
+    expect(state.refused).toBe(false);
+    expect(state.sources.some((s) => s.kind === 'api')).toBe(true);
+  });
+
+  it('sem matrícula em lugar nenhum, continua pedindo em vez de inventar', async () => {
+    const state = await runWithFacts('e meu banco de horas?', {});
+
+    expect(state.refused).toBe(true);
+    expect(state.refusalReason).toBe('missingIdentification');
+  });
+
+  /** A matrícula da PERGUNTA ganha da sessão, senão não dá para consultar outra pessoa. */
+  it('a matrícula dita na pergunta tem precedência sobre a da sessão', async () => {
+    const state = await runWithFacts('qual o saldo de férias do colaborador 2077?', { employeeId: 1042 });
+
+    expect(state.sources.some((s) => s.kind === 'api' && s.endpoint.includes("2077"))).toBe(true);
+  });
+
+  it('a matrícula dita na pergunta é promovida a fato da sessão', async () => {
+    const state = await run('Qual o meu saldo de férias? Meu id é 1042.');
+
+    expect(state.facts.employeeId).toBe(1042);
+  });
 
   it('kb route: answers from a document and cites the source', async () => {
     const state = await run('Quantos dias de férias eu tenho direito por ano?');

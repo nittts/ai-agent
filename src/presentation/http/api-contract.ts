@@ -1,7 +1,7 @@
 import type { Route, RefusalReason, Source, DocumentSource, ApiSource } from '../../domain/answer';
-import type { ConversationTurn } from '../../domain/conversation';
+import type { ConversationTurn, SessionFacts } from '../../domain/conversation';
 
-export type { Route, RefusalReason, Source, DocumentSource, ApiSource, ConversationTurn };
+export type { Route, RefusalReason, Source, DocumentSource, ApiSource, ConversationTurn, SessionFacts };
 
 export interface Cost {
   inputTokens: number;
@@ -26,6 +26,15 @@ export interface AskRequest {
   bypassCache?: boolean;
 
   history?: ConversationTurn[];
+
+  /**
+   * Fatos da SESSÃO — hoje só a matrícula.
+   *
+   * Fora da janela de histórico de propósito: "use esse id daqui em diante" é
+   * um fato que vale enquanto a sessão durar, não um turno que expira depois de
+   * três trocas. A resposta devolve `facts` atualizado para o cliente guardar.
+   */
+  facts?: SessionFacts;
 }
 
 export interface AskResponse {
@@ -48,6 +57,9 @@ export interface AskResponse {
    * recusa.
    */
   unverified: string[];
+
+  /** Fatos aprendidos; o cliente guarda e reenvia no próximo request. */
+  facts: SessionFacts;
 
   refused: boolean;
   refusalReason: RefusalReason | null;

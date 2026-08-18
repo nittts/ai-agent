@@ -29,6 +29,7 @@ function decideReason(state: AgentStateType, ctx: NodeContext): RefusalReason {
   const neededAnId =
     (state.route === 'tool' || state.route === 'hybrid') &&
     state.classification?.employeeId === undefined &&
+    state.facts.employeeId === undefined &&
     state.classification?.ticketId === undefined;
 
   if (neededAnId) return 'missingIdentification';

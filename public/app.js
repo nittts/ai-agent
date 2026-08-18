@@ -389,6 +389,22 @@
   var scroll = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
   var REVEAL_FRAMES = 12;
   var prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  var FACTS_KEY = "assistente-rh:fatos";
+  function loadFacts() {
+    try {
+      const raw = sessionStorage.getItem(FACTS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+  function saveFacts(facts2) {
+    try {
+      sessionStorage.setItem(FACTS_KEY, JSON.stringify(facts2));
+    } catch {
+      return;
+    }
+  }
   var PANEL_KEY = "assistente-rh:painel";
   var NARROW_WIDTH = 980;
   function panelDefault() {
@@ -442,6 +458,7 @@
   }
   function clearHistory() {
     sessionStorage.removeItem(HISTORY_KEY);
+    sessionStorage.removeItem(FACTS_KEY);
   }
   function ask(text) {
     if (busy || !text.trim()) return;
@@ -453,6 +470,7 @@
     const target = addAnswer();
     scroll();
     const history = loadHistory();
+    const facts2 = loadFacts();
     let pending = "";
     let revealed = "";
     let streamEnded = false;
@@ -521,6 +539,7 @@
           renderUnverified(result.unverified);
           scroll();
           remember(text, result.answer);
+          if (result.facts) saveFacts(result.facts);
           renderInterpretation(result.interpretedAs);
           streamEnded = true;
           if (!frame) finish();
@@ -539,7 +558,7 @@
         const response = await fetch("/ask/stream", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question: text, history })
+          body: JSON.stringify({ question: text, history, facts: facts2 })
         });
         if (!response.ok || !response.body) {
           throw new Error(`HTTP ${response.status}`);

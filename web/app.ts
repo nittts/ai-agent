@@ -7,7 +7,7 @@ import type {
 } from '../src/presentation/http/api-contract';
 import { parseMarkdown, type Inline } from '../src/shared/markdown/parse';
 import { SseReader } from '../src/shared/sse/sse-reader';
-import { MAX_HISTORY_TURNS, type ConversationTurn } from '../src/domain/conversation';
+import { MAX_HISTORY_TURNS, type ConversationTurn, type SessionFacts } from '../src/domain/conversation';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -330,6 +330,34 @@ const REVEAL_FRAMES = 12;
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
+/*
+ * Fatos da sessao ficam SEPARADOS da conversa, e de proposito.
+ *
+ * A matricula informada uma vez vale enquanto a aba estiver aberta; guarda-la
+ * junto dos turnos a fazia expirar com a janela de 6, e "use esse id daqui em
+ * diante" parava de valer duas perguntas depois.
+ *
+ * "Nova conversa" apaga os dois: comecar do zero inclui deixar de saber quem e.
+ */
+const FACTS_KEY = 'assistente-rh:fatos';
+
+function loadFacts(): SessionFacts {
+  try {
+    const raw = sessionStorage.getItem(FACTS_KEY);
+    return raw ? (JSON.parse(raw) as SessionFacts) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFacts(facts: SessionFacts): void {
+  try {
+    sessionStorage.setItem(FACTS_KEY, JSON.stringify(facts));
+  } catch {
+    return;
+  }
+}
+
 const PANEL_KEY = 'assistente-rh:painel';
 const NARROW_WIDTH = 980;
 
@@ -392,6 +420,7 @@ function remember(question: string, answer: string): void {
 
 function clearHistory(): void {
   sessionStorage.removeItem(HISTORY_KEY);
+  sessionStorage.removeItem(FACTS_KEY);
 }
 
 function ask(text: string): void {
@@ -408,6 +437,7 @@ function ask(text: string): void {
   scroll();
 
   const history = loadHistory();
+  const facts = loadFacts();
 
   let pending = '';
   let revealed = '';
@@ -493,6 +523,8 @@ function ask(text: string): void {
         scroll();
 
         remember(text, result.answer);
+        // A matrícula aprendida sobrevive à janela de histórico.
+        if (result.facts) saveFacts(result.facts);
         renderInterpretation(result.interpretedAs);
 
         streamEnded = true;
@@ -514,7 +546,7 @@ function ask(text: string): void {
       const response = await fetch('/ask/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: text, history }),
+        body: JSON.stringify({ question: text, history, facts }),
       });
 
       if (!response.ok || !response.body) {

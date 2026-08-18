@@ -22,3 +22,18 @@ export function formatHistory(turns: readonly ConversationTurn[]): string {
     .map((turn) => `${turn.role === 'user' ? 'Usuário' : 'Assistente'}: ${turn.content}`)
     .join('\n');
 }
+
+export interface SessionFacts {
+  employeeId?: number;
+}
+
+export function mergeFacts(current: SessionFacts, learned: SessionFacts): SessionFacts {
+  return { ...current, ...Object.fromEntries(Object.entries(learned).filter(([, v]) => v !== undefined)) };
+}
+
+export function sanitiseFacts(value: unknown): SessionFacts {
+  if (typeof value !== 'object' || value === null) return {};
+
+  const id = (value as SessionFacts).employeeId;
+  return Number.isInteger(id) && (id as number) > 0 ? { employeeId: id } : {};
+}

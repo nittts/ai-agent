@@ -27,6 +27,8 @@ export function createClassifyNode(ctx: NodeContext) {
           classification: data,
           route: data.route,
           standaloneQuestion,
+          // Matrícula dita na pergunta vira fato da sessão e sobrevive à janela.
+          ...(data.employeeId !== undefined ? { facts: { employeeId: data.employeeId } } : {}),
           usage,
 
           ...(data.route === 'outOfScope'
