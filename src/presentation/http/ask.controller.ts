@@ -83,7 +83,7 @@ export class AskController {
       return;
     }
 
-    await this.streamAnswer(question, [], reply, {});
+    await this.streamAnswer(question, [], reply, {}, undefined);
   }
 
   @Post('stream')
@@ -99,7 +99,13 @@ export class AskController {
       return;
     }
 
-    await this.streamAnswer(question, validateHistory(body?.history), reply, sanitiseFacts(body?.facts));
+    await this.streamAnswer(
+      question,
+      validateHistory(body?.history),
+      reply,
+      sanitiseFacts(body?.facts),
+      body?.confirmAction,
+    );
   }
 
   private async streamAnswer(
@@ -107,6 +113,7 @@ export class AskController {
     history: ConversationTurn[],
     reply: FastifyReply,
     facts: SessionFacts,
+    confirmAction: unknown,
   ): Promise<void> {
     const correlationId = currentCorrelationId() ?? newCorrelationId();
 
@@ -134,6 +141,7 @@ export class AskController {
       const result = await this.answerQuestion.execute(question, {
         history,
         facts,
+        confirmAction,
         onToken: (token) => {
           ttftMs ??= Date.now() - start;
           send({ type: 'token', text: token });

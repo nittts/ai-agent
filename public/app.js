@@ -460,7 +460,28 @@
     sessionStorage.removeItem(HISTORY_KEY);
     sessionStorage.removeItem(FACTS_KEY);
   }
-  function ask(text) {
+  var pendente = null;
+  var AFIRMATIVO = /^\s*(sim|confirmo|confirmado|confirmar|pode (abrir|sim|mandar)|isso|isso mesmo|ok|manda ver|beleza)\b/i;
+  function renderConfirmacao(target, acao) {
+    const barra = el("div", "confirm-bar");
+    const confirmar = el("button", "confirm-yes", "Confirmar abertura");
+    confirmar.type = "button";
+    const cancelar = el("button", "confirm-no", "Cancelar");
+    cancelar.type = "button";
+    const encerrar = (aviso) => {
+      pendente = null;
+      barra.replaceChildren(el("span", "confirm-done", aviso));
+    };
+    confirmar.addEventListener("click", () => {
+      const acaoConfirmada = acao;
+      encerrar("Abrindo\u2026");
+      ask("Confirmo a abertura do chamado.", acaoConfirmada);
+    });
+    cancelar.addEventListener("click", () => encerrar("Cancelado. Nada foi aberto."));
+    barra.append(confirmar, cancelar);
+    target.append(barra);
+  }
+  function ask(text, confirmAction) {
     if (busy || !text.trim()) return;
     busy = true;
     send.disabled = true;
@@ -525,6 +546,7 @@
         case "done": {
           const result = event.summary;
           if (result.refused) target.dataset.refused = "true";
+          pendente = result.pendingAction ?? null;
           if (!receivedAnything && result.answer) {
             revealed = result.answer;
             renderAnswer(target, revealed);
@@ -539,6 +561,7 @@
           renderUnverified(result.unverified);
           scroll();
           remember(text, result.answer);
+          if (pendente) renderConfirmacao(target, pendente);
           if (result.facts) saveFacts(result.facts);
           renderInterpretation(result.interpretedAs);
           streamEnded = true;
@@ -558,7 +581,7 @@
         const response = await fetch("/ask/stream", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question: text, history, facts: facts2 })
+          body: JSON.stringify({ question: text, history, facts: facts2, confirmAction })
         });
         if (!response.ok || !response.body) {
           throw new Error(`HTTP ${response.status}`);
@@ -643,7 +666,8 @@
   }
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    ask(input.value);
+    const confirmando = pendente && AFIRMATIVO.test(input.value) ? pendente : void 0;
+    ask(input.value, confirmando);
   });
   chaos.addEventListener("change", () => void toggleChaos(chaos.checked));
   resetButton.addEventListener("click", resetConversation);

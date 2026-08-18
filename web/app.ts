@@ -7,7 +7,12 @@ import type {
 } from '../src/presentation/http/api-contract';
 import { parseMarkdown, type Inline } from '../src/shared/markdown/parse';
 import { SseReader } from '../src/shared/sse/sse-reader';
-import { MAX_HISTORY_TURNS, type ConversationTurn, type SessionFacts } from '../src/domain/conversation';
+import {
+  MAX_HISTORY_TURNS,
+  type ConversationTurn,
+  type PendingAction,
+  type SessionFacts,
+} from '../src/domain/conversation';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -423,7 +428,47 @@ function clearHistory(): void {
   sessionStorage.removeItem(FACTS_KEY);
 }
 
-function ask(text: string): void {
+/*
+ * A confirmacao de uma acao que ESCREVE e um BOTAO, nao uma frase.
+ *
+ * O usuario digitou "confirmo" tres vezes e nada aconteceu, porque o console
+ * nunca devolvia a proposta. Consertar isso interpretando texto seria repetir o
+ * erro de origem: para algo que cria registro, o clique e inequivoco e a frase
+ * nao e. O texto afirmativo tambem funciona, mas como atalho — e so enquanto a
+ * proposta estiver na tela.
+ */
+/** A proposta que está na tela agora. Só ela pode ser confirmada. */
+let pendente: PendingAction | null = null;
+
+/** Afirmativas explícitas — atalho de teclado para o botão, nada mais. */
+const AFIRMATIVO = /^\s*(sim|confirmo|confirmado|confirmar|pode (abrir|sim|mandar)|isso|isso mesmo|ok|manda ver|beleza)\b/i;
+
+function renderConfirmacao(target: HTMLElement, acao: PendingAction): void {
+  const barra = el('div', 'confirm-bar');
+
+  const confirmar = el('button', 'confirm-yes', 'Confirmar abertura') as HTMLButtonElement;
+  confirmar.type = 'button';
+  const cancelar = el('button', 'confirm-no', 'Cancelar') as HTMLButtonElement;
+  cancelar.type = 'button';
+
+  const encerrar = (aviso: string) => {
+    pendente = null;
+    barra.replaceChildren(el('span', 'confirm-done', aviso));
+  };
+
+  confirmar.addEventListener('click', () => {
+    const acaoConfirmada = acao;
+    encerrar('Abrindo…');
+    ask('Confirmo a abertura do chamado.', acaoConfirmada);
+  });
+
+  cancelar.addEventListener('click', () => encerrar('Cancelado. Nada foi aberto.'));
+
+  barra.append(confirmar, cancelar);
+  target.append(barra);
+}
+
+function ask(text: string, confirmAction?: PendingAction): void {
   if (busy || !text.trim()) return;
 
   busy = true;
@@ -505,6 +550,7 @@ function ask(text: string): void {
       case 'done': {
         const result = event.summary;
         if (result.refused) target.dataset.refused = 'true';
+        pendente = result.pendingAction ?? null;
 
         if (!receivedAnything && result.answer) {
           revealed = result.answer;
@@ -523,6 +569,7 @@ function ask(text: string): void {
         scroll();
 
         remember(text, result.answer);
+        if (pendente) renderConfirmacao(target, pendente);
         // A matrícula aprendida sobrevive à janela de histórico.
         if (result.facts) saveFacts(result.facts);
         renderInterpretation(result.interpretedAs);
@@ -546,7 +593,7 @@ function ask(text: string): void {
       const response = await fetch('/ask/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: text, history, facts }),
+        body: JSON.stringify({ question: text, history, facts, confirmAction }),
       });
 
       if (!response.ok || !response.body) {
@@ -656,7 +703,10 @@ async function toggleChaos(on: boolean): Promise<void> {
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  ask(input.value);
+
+  // Afirmativa com proposta na tela confirma AQUELA proposta, e nenhuma outra.
+  const confirmando = pendente && AFIRMATIVO.test(input.value) ? pendente : undefined;
+  ask(input.value, confirmando);
 });
 
 chaos.addEventListener('change', () => void toggleChaos(chaos.checked));
