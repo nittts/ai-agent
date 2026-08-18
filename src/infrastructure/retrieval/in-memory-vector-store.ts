@@ -37,17 +37,43 @@ export class InMemoryVectorStore implements VectorStorePort {
     this.version = snapshot.corpusVersion;
   }
 
+  /**
+   * Busca por similaridade, com UMA vaga por seção.
+   *
+   * Medido antes desta regra: em 10 das 14 perguntas de política o topo-4
+   * trazia a mesma seção duas ou três vezes, e a resposta via 2,8 seções
+   * distintas em vez de 4. Um terço do contexto era redundante — e o que ficava
+   * de fora era justamente a seção que faltava para a pergunta multi-documento.
+   *
+   * A causa é o chunking por seção: uma seção longa vira vários trechos, todos
+   * parecidos com a mesma pergunta, e eles se empilham no topo. Guardar o melhor
+   * trecho de cada seção troca redundância por cobertura, sem tocar no limiar e
+   * sem chamada de modelo — o ranking continua sendo a similaridade.
+   */
   search(queryEmbedding: number[], k: number): SearchResult[] {
     if (this.chunks.length === 0) return [];
 
-    return this.chunks
+    const ordenados = this.chunks
       .map((chunk) => ({
         text: chunk.text,
         metadata: chunk.metadata,
         score: cosineSimilarity(queryEmbedding, chunk.embedding),
       }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, k);
+      .sort((a, b) => b.score - a.score);
+
+    const melhorPorSecao: SearchResult[] = [];
+    const vistas = new Set<string>();
+
+    for (const resultado of ordenados) {
+      const secao = `${resultado.metadata.file}§${resultado.metadata.section}`;
+      if (vistas.has(secao)) continue;
+
+      vistas.add(secao);
+      melhorPorSecao.push(resultado);
+      if (melhorPorSecao.length === k) break;
+    }
+
+    return melhorPorSecao;
   }
 
   corpusVersion(): string {

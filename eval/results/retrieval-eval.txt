@@ -1,5 +1,5 @@
 Retrieval evaluation — model=gemini-embedding-001 corpusVersion=56ca68fdb394
-generated at 2026-08-17T21:37:59.455Z
+generated at 2026-08-18T00:50:15.943Z
 
 metric         value
 --------------------
